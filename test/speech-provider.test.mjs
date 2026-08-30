@@ -25,6 +25,7 @@ test('OpenAI provider keeps identity separate from built-in voice and requests s
     const provider = new OpenAISpeechProvider({ apiKey: 'test-only' });
     const response = await provider.synthesizeStream({
       text: 'A measured question?', voice: 'live-interviewer', deliveryHints: ['dry'],
+      delivery: 'PASSIONATE', format: 'DEBATE', role: 'against',
     });
     assert.equal(response.ok, true);
     assert.equal(request.url, 'https://api.openai.com/v1/audio/speech');
@@ -32,6 +33,9 @@ test('OpenAI provider keeps identity separate from built-in voice and requests s
     assert.equal(request.body.voice, 'cedar');
     assert.equal(request.body.response_format, 'pcm');
     assert.match(request.body.instructions, /British radio interviewer/);
+    assert.match(request.body.instructions, /strong emotional commitment/);
+    assert.match(request.body.instructions, /live adversarial debate/);
+    assert.match(request.body.instructions, /rebuttals bite/);
     assert.equal(request.options.headers.authorization, 'Bearer test-only');
   } finally {
     globalThis.fetch = originalFetch;

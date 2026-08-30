@@ -1,0 +1,16 @@
+[Unit]
+Description=Spoken AI Studio public conversation application
+Wants=network-online.target
+After=network-online.target spoken-ai-public-router.service
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-tts-bakeoff-20260830
+ExecStart=/bin/bash -lc 'set -a; source .run-v2/bakeoff-service.env; set +a; exec /usr/bin/node server-spoken.mjs'
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

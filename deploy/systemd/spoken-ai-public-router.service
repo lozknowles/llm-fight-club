@@ -1,0 +1,22 @@
+[Unit]
+Description=Spoken AI Studio public provider-neutral speech router
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-tts-bakeoff-20260830
+EnvironmentFile=/fast/work/llm-fight-club-tts-bakeoff-20260830/.env.local
+Environment=SPEECH_ROUTER_HOST=127.0.0.1
+Environment=SPEECH_ROUTER_PORT=18872
+Environment=SPEECH_ALLOWED_ORIGIN=https://lozknowles.com
+Environment=NATURAL_TTS_URL=http://127.0.0.1:18773
+Environment=FLITE_TTS_URL=http://127.0.0.1:18774
+ExecStart=/usr/bin/node speech/speech-router.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

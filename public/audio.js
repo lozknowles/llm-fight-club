@@ -151,6 +151,10 @@ async function speech(turn) {
       text: turn.text,
       voice: turn.voice,
       deliveryHints: turn.delivery_hints || [],
+      delivery: $('#delivery').value,
+      format: conversation.format,
+      style: conversation.style,
+      role: turn.role,
       profile: speechProfile,
     }),
     signal: streamAbort.signal,
@@ -337,6 +341,9 @@ $$('.preview').forEach((button) => {
         body: JSON.stringify({
           text: `Hello. This is the ${card.querySelector('h2').textContent.toLowerCase()} voice.`,
           voice: card.querySelector('.voice').value,
+          delivery: $('#delivery').value,
+          format: $('#format').value,
+          role: card.dataset.role,
           profile: speechProfile,
         }),
       });

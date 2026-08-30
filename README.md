@@ -27,6 +27,8 @@ HOST=127.0.0.1 PORT=18770 node server-spoken.mjs
 
 Open `/audio.html`. The browser uses same-origin `/api/` and `/tts/` routes, so the application works beneath an unlisted reverse-proxy prefix without exposing the internal model or speech services.
 
+The delivery selector defaults to `PASSIONATE`. It changes performance direction—emotional commitment, emphasis, pace and rebuttal energy—while keeping the selected synthetic voice identity stable. `BALANCED` and `RESTRAINED` are available for interviews or quieter programmes.
+
 ## Verification
 
 ```bash

@@ -2,6 +2,9 @@
 
 ## Unreleased — LIVE TTS bake-off
 
+- Added passionate, balanced and restrained delivery controls without changing participant voice identity.
+- Added format-aware OpenAI performance direction so debates, interviews, panels and cross-examinations sound emotionally responsive rather than read aloud.
+- Prepared the qualified streaming build for an unlisted LozKnowles.com route with backend-only credentials and local fallbacks.
 - Added `LIVE_FAST`, `LIVE_QUALITY`, `STUDIO` and `OFFLINE` speech purpose profiles.
 - Added backend-only OpenAI `gpt-4o-mini-tts` streaming PCM with distinct cedar, marin and coral identities.
 - Added a fail-closed ElevenLabs Flash v2.5 streaming provider ready for configured voice IDs.
@@ -11,7 +14,7 @@
 - Added causality-safe LLM turn prefetch during the preceding participant's playback.
 - Added identical-script provider benchmark audio and browser acceptance evidence.
 - Retained Qwen as STUDIO and Flite as offline/final fallback.
-- Did not deploy publicly or modify Agent Control.
+- Did not modify Agent Control.
 
 ## 0.2.0 — 2026-08-30
 

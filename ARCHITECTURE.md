@@ -35,11 +35,15 @@ The engine owns state transitions. Neither an LLM nor speech provider can advanc
 
 Voice identity and delivery are separate. A participant chooses a stable synthetic voice identity while each generated turn supplies compact hints such as measured, dry, defensive or rapid. The speech router prefers Qwen and maps to a distinct Flite voice if natural synthesis is unavailable.
 
+The LIVE path also accepts an allow-listed delivery intensity (`PASSIONATE`, `BALANCED` or `RESTRAINED`) plus format and role. The OpenAI provider combines these with the stable voice identity to direct emotional range, intonation, pace and emphasis. No raw provider prompt or API credential is exposed to the browser.
+
 The v0.2 transport returns a complete WAV. The browser plays it through one persistent audio element and calls `complete-playback` only after the `ended` event. Slow generation therefore delays a turn but never shortens or overlaps its real-time playback. The provider boundary permits future chunked/streaming speech, microphone input and interruption without changing conversation policy.
 
 ## Deployment boundary
 
 Only the conversation application is reverse-proxied publicly. LLM and speech-provider ports remain on loopback or the private Tailscale interface. Browser speech calls pass through the application's same-origin `/tts/` proxy, allowing deployment under an unlisted URL prefix without CORS exposure.
+
+The LozKnowles.com deployment remains unlinked and emits `X-Robots-Tag: noindex, nofollow, noarchive`. The unlisted path is discoverability reduction rather than authentication; the API key stays exclusively in the hpubuntu speech-router service environment.
 
 Agent Control is not imported or modified. Its protected services remain operationally separate.
 
