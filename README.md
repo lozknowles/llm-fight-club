@@ -56,6 +56,8 @@ The hidden deployment also exposes three explicitly labelled ElevenLabs v3 choic
 
 Every participant can now combine a built-in original fictional profile with an optional free-form personality prompt. The prompt is bounded, stored with the conversation and applied as character direction without changing model, role or voice identity. Built-in comic archetypes use broad mechanisms such as reclusive puzzle logic, erudite digression and anxious existential escalation; they do not impersonate named performers or reproduce protected characters.
 
+During a live show, `Throw a Grenade` accepts a typed comment or browser speech recognition. Throwing it interrupts current playback, discards any prefetched next reply, records the audience intervention and requires every participant to address it on their next turn.
+
 ## Privacy and release
 
 Conversation transcripts and generated audio are stored server-side under the configured data directory. An unlisted URL is not authentication; production operators should add authentication, retention controls or rate limiting before treating the service as private. No homepage or navigation link is required.

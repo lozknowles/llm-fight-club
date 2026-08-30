@@ -85,4 +85,6 @@ The ElevenLabs implementation is `ElevenLabsSpeechProvider`, configured as `elev
 
 While turn A is audible, the server may prepare turn B on a cloned conversation snapshot containing A's final text. The prepared result is committed only after A's playback acknowledgement and only if the selected participant and transcript length still match. This preserves causal ordering while removing most next-turn LLM latency from the audible gap.
 
+`Throw a Grenade` is a first-class audience intervention rather than transcript text pretending to be a participant. Typed or browser-transcribed input stops current playback, invalidates the cloned prefetch, persists the intervention, and adds a per-participant acknowledgement obligation. The intervention remains in JSON/Markdown exports and compact prompt context.
+
 The application router is a qualified prototype, not a replacement for Agent Control. Its profile/capability vocabulary maps directly to Agent Control provider resources and a future verified `speech.synthesize@1` job action.

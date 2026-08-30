@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from'node:assert/strict';import{createConversation,beginTurn,recordTurn,completePlayback,STATES,PERSONALITIES}from'../lib/conversation-engine.mjs';
+import test from 'node:test';import assert from'node:assert/strict';import{createConversation,beginTurn,recordTurn,completePlayback,submitAudienceIntervention,STATES,PERSONALITIES}from'../lib/conversation-engine.mjs';
 const participant=(role,index)=>({name:`P${index}`,role,model:`m${index}`,voice:`v${index}`,personality:PERSONALITIES[index]});
 const speak=c=>{const p=beginTurn(c);recordTurn(c,{text:`${p.role} says something`,generation_latency_ms:1,tts_provider:'browser-speech-synthesis'});completePlayback(c,{durationMs:250});return p;};
 test('interview alternates and completes only after playback',()=>{const c=createConversation({format:'INTERVIEW',premise:'A premise',turnLimit:4,participants:[participant('interviewer',0),participant('guest',1)]});assert.equal(speak(c).role,'interviewer');assert.equal(speak(c).role,'guest');assert.equal(speak(c).role,'interviewer');assert.equal(speak(c).role,'guest');assert.equal(c.state,STATES.COMPLETED);assert.equal(c.transcript[0].audio_duration_ms,250);});
@@ -30,4 +30,22 @@ test('built-in comic archetypes remain original fictional personalities',()=>{
     assert.ok(profile);
     assert.match(profile.privateNotes,/Original fictional archetype/);
   }
+});
+test('audience intervention interrupts playback and requires every participant to address it',()=>{
+  const conversation=createConversation({format:'INTERVIEW',premise:'A',turnLimit:2,participants:[participant('interviewer',0),participant('guest',1)]});
+  beginTurn(conversation);recordTurn(conversation,{text:'Opening',generation_latency_ms:1});
+  const intervention=submitAudienceIntervention(conversation,'But what if the queue is imaginary?',{durationMs:125});
+  assert.equal(conversation.awaitingPlayback,false);
+  assert.equal(conversation.transcript[0].interrupted_by_audience,true);
+  assert.equal(conversation.transcript[0].audio_duration_ms,125);
+  assert.equal(intervention.pendingParticipantIds.length,2);
+  assert.equal(conversation.turnLimit,3);
+  speak(conversation);speak(conversation);
+  assert.equal(intervention.pendingParticipantIds.length,0);
+  assert.equal(intervention.acknowledgedBy.length,2);
+});
+test('audience intervention rejects empty and overlong comments',()=>{
+  const conversation=createConversation({format:'INTERVIEW',premise:'A',participants:[participant('interviewer',0),participant('guest',1)]});
+  assert.throws(()=>submitAudienceIntervention(conversation,'   '),/1-500/);
+  assert.throws(()=>submitAudienceIntervention(conversation,'x'.repeat(501)),/1-500/);
 });

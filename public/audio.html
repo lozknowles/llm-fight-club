@@ -21,6 +21,9 @@
   .error{color:#ff8e9e}
   .archive-player{margin-top:12px;padding-top:12px;border-top:1px solid #46384c}
   .archive-player audio{width:100%;margin-top:8px}
+  .grenade{margin-top:14px;padding-top:12px;border-top:1px solid #46384c}
+  .grenade h3{margin:0 0 5px}
+  .intervention{border-left:6px solid #ff9f1c;padding:10px 12px;margin:8px 0;background:#30251d;border-radius:8px}
   #third{display:none}
   @media(max-width:600px){body{padding:10px}.controls button{width:46%}}
 </style>
@@ -77,6 +80,15 @@
     <button id="skip">Skip speech</button>
     <button id="stop">Stop</button>
     <a id="jsonExport">JSON</a> · <a id="mdExport">Markdown</a> · <a id="audioExport" hidden download="conversation.mp3">Conversation MP3</a>
+    <div class="grenade">
+      <h3>Throw a Grenade</h3>
+      <p class="meta">Interrupt with a curve ball. Playback stops and every participant must address it on their next turn.</p>
+      <textarea id="grenadeText" rows="2" maxlength="500" placeholder="Type a curve ball comment or question…"></textarea>
+      <button type="button" id="grenadeMic">🎙 Speak</button>
+      <button type="button" id="grenadeThrow">Throw Grenade</button>
+      <span id="grenadeStatus" class="meta" role="status"></span>
+      <div id="grenadeHistory"></div>
+    </div>
     <div id="archivePlayback" class="archive-player" hidden>
       <label>WHOLE CONVERSATION PLAYBACK SPEED
         <select id="archivePlaybackRate"><option value="0.75">0.75×</option><option value="1" selected>1.00×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option><option value="2">2.00×</option></select>

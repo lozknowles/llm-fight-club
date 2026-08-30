@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-30 — Live Throw a Grenade intervention
+
+- Added typed and browser speech-recognised audience curve balls during a running show.
+- Throwing a grenade now stops playback, invalidates prefetch and requires every participant to address the intervention.
+- Added intervention history, pending-acknowledgement status and JSON/Markdown export persistence.
+
 ## 2026-08-30 — Participant personality prompts
 
 - Added a bounded free-form personality prompt for every participant, layered over the selected reusable profile.

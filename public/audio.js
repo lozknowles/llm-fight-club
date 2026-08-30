@@ -27,6 +27,8 @@ const player = $('#player');
 const archivePlayer = $('#archivePlayer');
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const audioContext = AudioContextClass ? new AudioContextClass({ latencyHint: 'interactive', sampleRate: 24000 }) : null;
+const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+let grenadeRecognition = null;
 
 async function api(path, method = 'GET', payload) {
   const response = await fetch(endpoint(path), {
@@ -262,6 +264,10 @@ function render() {
       <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${live}${audio}</span>
     </article>`;
   }).join('');
+  $('#grenadeHistory').innerHTML = (conversation.audienceInterventions || []).slice().reverse().map((item) => {
+    const pending = item.pendingParticipantIds?.length || 0;
+    return `<div class="intervention"><b>💣 Audience curve ball</b><p>${escapeHtml(item.text)}</p><span class="meta">${pending ? `${pending} participant${pending === 1 ? '' : 's'} still to address it` : 'Addressed by everyone'}</span></div>`;
+  }).join('');
   const audioReady = conversation.audio?.status === 'ready';
   const archiveUrl = endpoint(`/api/conversations/${conversation.id}/conversation.mp3`);
   $('#audioExport').hidden = !audioReady;
@@ -272,6 +278,12 @@ function render() {
     archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
     archivePlayer.preservesPitch = true;
   }
+}
+
+function escapeHtml(value) {
+  const node = document.createElement('div');
+  node.textContent = String(value);
+  return node.innerHTML;
 }
 
 function stopAudio() {
@@ -310,6 +322,7 @@ async function play(turn) {
   if (completionWatch) clearInterval(completionWatch);
   completionWatch = null;
   settled = false;
+  startedAt = 0;
   try {
     await speech(turn);
   } catch (error) {
@@ -385,6 +398,45 @@ $('#stop').onclick = async () => {
   conversation = await api(`/api/conversations/${conversation.id}/stop`, 'POST', {});
   render();
 };
+
+$('#grenadeThrow').onclick = async () => {
+  const text = $('#grenadeText').value.trim();
+  if (!text) { $('#grenadeStatus').textContent = 'Type or speak a curve ball first.'; return; }
+  try {
+    settled = true;
+    if (completionWatch) clearInterval(completionWatch);
+    completionWatch = null;
+    const durationMs = startedAt ? Math.max(0, Math.round(performance.now() - startedAt)) : null;
+    stopAudio();
+    conversation = await api(`/api/conversations/${conversation.id}/intervention`, 'POST', { text, durationMs });
+    $('#grenadeText').value = '';
+    $('#grenadeStatus').textContent = 'Curve ball thrown. Everyone must respond.';
+    render();
+    await next();
+  } catch (error) {
+    $('#grenadeStatus').textContent = error.message;
+  }
+};
+
+if (!SpeechRecognitionClass) {
+  $('#grenadeMic').disabled = true;
+  $('#grenadeMic').title = 'Browser speech recognition is unavailable; type the intervention instead.';
+} else {
+  $('#grenadeMic').onclick = () => {
+    if (grenadeRecognition) { grenadeRecognition.stop(); return; }
+    grenadeRecognition = new SpeechRecognitionClass();
+    grenadeRecognition.lang = 'en-GB';
+    grenadeRecognition.interimResults = true;
+    grenadeRecognition.continuous = false;
+    grenadeRecognition.onstart = () => { $('#grenadeMic').textContent = '■ Stop listening'; $('#grenadeStatus').textContent = 'Listening…'; };
+    grenadeRecognition.onresult = (event) => {
+      $('#grenadeText').value = Array.from(event.results).map((result) => result[0].transcript).join(' ').trim();
+    };
+    grenadeRecognition.onerror = (event) => { $('#grenadeStatus').textContent = `Speech input failed: ${event.error}`; };
+    grenadeRecognition.onend = () => { grenadeRecognition = null; $('#grenadeMic').textContent = '🎙 Speak'; if ($('#grenadeText').value.trim()) $('#grenadeStatus').textContent = 'Ready to throw.'; };
+    grenadeRecognition.start();
+  };
+}
 
 $$('.preview').forEach((button) => {
   button.onclick = async () => {
