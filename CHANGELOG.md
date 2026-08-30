@@ -11,6 +11,7 @@
 - Separated voice identity from personality-derived delivery hints.
 - Added persistent transcripts, telemetry, exports and browser audio controls.
 - Added same-origin speech proxying and prefix-safe browser URLs for an unlisted reverse-proxy deployment.
+- Hardened playback completion with an `ended`-state watcher for throttled/background browser tabs.
 - Added controlled A/B, long-interview, live-loop, fallback, acoustic and browser qualifications.
 - Added an idle GPU unload guard and preserved protected hpubuntu workloads.
 

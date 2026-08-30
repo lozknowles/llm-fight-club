@@ -12,6 +12,7 @@ let startedAt = 0;
 let ttsLatency = 0;
 let ttsProvider = 'unknown';
 let settled = false;
+let completionWatch = null;
 const player = $('#player');
 
 async function api(path, method = 'GET', payload) {
@@ -99,6 +100,10 @@ function render() {
 async function finish(skipped = false) {
   if (settled) return;
   settled = true;
+  if (completionWatch) {
+    clearInterval(completionWatch);
+    completionWatch = null;
+  }
   const durationMs = Math.round(performance.now() - startedAt);
   if (audioUrl) {
     URL.revokeObjectURL(audioUrl);
@@ -115,6 +120,7 @@ async function finish(skipped = false) {
 }
 
 async function play(turn) {
+  if (completionWatch) clearInterval(completionWatch);
   audioUrl = await speech(turn.text, turn.voice, turn.delivery_hints || []);
   player.src = audioUrl;
   settled = false;
@@ -125,6 +131,9 @@ async function play(turn) {
   player.onended = () => finish(false);
   player.onerror = () => { $('#error').textContent = 'Audio playback failed'; };
   await player.play();
+  completionWatch = setInterval(() => {
+    if (player.ended) finish(false);
+  }, 250);
 }
 
 async function next() {
@@ -166,7 +175,14 @@ $('#format').onchange = configure;
 $('#pause').onclick = async () => { player.pause(); conversation = await api(`/api/conversations/${conversation.id}/pause`, 'POST', {}); render(); };
 $('#resume').onclick = async () => { conversation = await api(`/api/conversations/${conversation.id}/resume`, 'POST', {}); await player.play(); render(); };
 $('#skip').onclick = () => { player.pause(); finish(true); };
-$('#stop').onclick = async () => { player.pause(); settled = true; conversation = await api(`/api/conversations/${conversation.id}/stop`, 'POST', {}); render(); };
+$('#stop').onclick = async () => {
+  player.pause();
+  settled = true;
+  if (completionWatch) clearInterval(completionWatch);
+  completionWatch = null;
+  conversation = await api(`/api/conversations/${conversation.id}/stop`, 'POST', {});
+  render();
+};
 
 $$('.preview').forEach((button) => {
   button.onclick = async () => {
