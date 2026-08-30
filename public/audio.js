@@ -467,11 +467,19 @@ async function play(turn) {
 async function next() {
   if (!conversation || conversation.awaitingPlayback || ['PAUSED', 'COMPLETED', 'STOPPED'].includes(conversation.state)) return;
   $('#status').textContent = 'Preparing next speaker…';
-  const result = await api(`/api/conversations/${conversation.id}/next`, 'POST', {});
-  conversation = result.conversation;
-  metrics = {};
-  render();
-  await play(result.turn);
+  $('#retry').hidden = true;
+  try {
+    const result = await api(`/api/conversations/${conversation.id}/next`, 'POST', {});
+    conversation = result.conversation;
+    metrics = {};
+    $('#error').textContent = '';
+    render();
+    await play(result.turn);
+  } catch (error) {
+    $('#error').textContent = error.message;
+    $('#status').textContent = `${conversation.format} · RESPONSE ERROR · retry is available`;
+    $('#retry').hidden = false;
+  }
 }
 
 $('#setup').onsubmit = async (event) => {
@@ -524,6 +532,7 @@ $('#resume').onclick = async () => {
   render();
 };
 $('#skip').onclick = () => { stopAudio(); finish(true); };
+$('#retry').onclick = () => next();
 $('#stop').onclick = async () => {
   stopAudio();
   settled = true;

@@ -58,6 +58,8 @@ Every participant can now combine a built-in original fictional profile with an 
 
 During a live show, `Throw a Grenade` accepts a typed comment or browser speech recognition. Throwing it interrupts current playback, discards any prefetched next reply and gives the interrupted participant the immediate response. Every other participant then responds in turn. A private semantic check prevents unrelated continuation from being falsely marked as acknowledgement.
 
+Grenade response generation is fail-safe: after ordinary retries, the system uses the stronger local model to repair a reply while retaining the selected personality and exact audience comment. A final grounded direct-response path prevents a strict semantic evaluator from leaving the programme stalled. Transient non-intervention generation failures expose a `Retry response` control.
+
 ## Autonomous barge-in
 
 The setup screen exposes `Off`, `Polite`, `Natural`, `Argumentative` and `Chaos` interruption levels plus hard-cut and natural-duck audio policies. While a turn is playing, the browser opens only three sparse listener checkpoints. Each checkpoint sends the server the word count corresponding to the current playback position; the server reconstructs that prefix itself, so neither the small local monitor nor the interrupting participant sees the unspoken suffix.

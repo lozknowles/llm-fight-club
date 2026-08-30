@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-30 — Non-stalling grenade recovery
+
+- Route intervention validation through the stronger local Qwen3 model.
+- If a participant repeatedly fails to address an audience grenade, retry through Qwen3 while preserving the selected personality and exact audience wording.
+- Add a final grounded direct-response safety path so a failed evaluator can never halt the programme with pending intervention obligations.
+- Added a visible `Retry response` control for unrelated transient generation errors.
+
 ## 2026-08-30 — Panel programme introducer
 
 - Relabelled the panel host as `Introducer / Host` in setup.

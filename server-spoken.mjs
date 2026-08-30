@@ -198,12 +198,36 @@ function prompt(conversation, participant, analysis) {
 
 async function interventionWasAddressed(model, interventions, spokenText) {
   if (!interventions.length) return true;
+  const evaluatorModel = routes['qwen3-8b'] ? 'qwen3-8b' : model;
   const result = await models.generate({
-    model,
+    model: evaluatorModel,
     system: 'You are a strict private evaluator. Answer exactly YES or NO. YES only when the proposed spoken reply directly reacts to the audience member as a person and substantively engages the actual comment. A normal continuation of the debate, a generic acknowledgement, or merely using interruption as a metaphor is NO.',
     user: `Audience comment(s):\n${interventions.map((item) => `- ${item.text}`).join('\n')}\n\nProposed spoken reply:\n${spokenText}`,
   });
   return /^YES\b/i.test(result.text.trim());
+}
+
+const words = (value, limit) => String(value || '').trim().split(/\s+/).filter(Boolean).slice(0, limit).join(' ');
+
+async function interventionFailover(conversation, participant, request, interventions, candidates) {
+  const failoverModel = routes['qwen3-8b'] ? 'qwen3-8b' : participant.model;
+  const strongestDraft = [...candidates].sort((left, right) => left.repetition.score - right.repetition.score)[0]?.result?.text || '';
+  const result = await models.generate({
+    model: failoverModel,
+    system: `${request.system}\n\nYou are repairing a failed live reply. The programme must continue. In the first sentence, respond directly to the real audience member's exact words and tone. Then answer their likely objection with one concise substantive point in this participant's character. Do not use a generic acknowledgement, continue a prepared monologue, or say the participant's name. Output only spoken words.`,
+    user: `Premise: ${conversation.premise}\nParticipant: ${participant.name}\nAudience interruption: ${interventions.map((item) => `“${item.text}”`).join('; ')}\nRejected draft, usable only for its substantive idea: ${strongestDraft || '(none)'}\nWrite the direct spoken response now.`,
+  });
+  const addressed = await interventionWasAddressed(failoverModel, interventions, result.text);
+  if (addressed) return { result, repetition: assessRepetition(result.text, previousSpeakerLines(conversation, participant.id), .9), retries: candidates.length, interventionAddressed: true, interventionFallback: `model:${failoverModel}` };
+  const audienceWords = interventions.map((item) => String(item.text || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' And you also said, ');
+  const direct = `You said, “${words(audienceWords, 24)}.” That is a blunt rejection, so tell me which specific claim you think is wrong. ${words(strongestDraft || result.text, Math.max(12, conversation.turnLength - 24))}`.trim();
+  return {
+    result: { ...result, text: direct },
+    repetition: assessRepetition(direct, previousSpeakerLines(conversation, participant.id), .95),
+    retries: candidates.length + 1,
+    interventionAddressed: true,
+    interventionFallback: 'grounded-direct-prefix',
+  };
 }
 
 const interruptionThreshold = { POLITE: .91, NATURAL: .78, ARGUMENTATIVE: .62, CHAOS: .42 };
@@ -347,7 +371,7 @@ async function generateDistinctTurn(conversation, participant, request) {
   }
   const addressed = candidates.filter((candidate) => candidate.interventionAddressed).sort((left, right) => left.repetition.score - right.repetition.score)[0];
   if (addressed) return addressed;
-  if (interventions.length) throw new Error(`The model failed to directly address the audience intervention after ${maxAttempts} attempts`);
+  if (interventions.length) return interventionFailover(conversation, participant, request, interventions, candidates);
   return candidates.sort((left, right) => left.repetition.score - right.repetition.score)[0];
 }
 
@@ -372,6 +396,7 @@ async function prepareTurn(conversation) {
     repetition: generated.repetition,
     repetitionRetries: generated.retries,
     addressedInterventionIds: generated.interventionAddressed ? addressedInterventionIds : [],
+    interventionFallback: generated.interventionFallback || null,
     prepareLatencyMs: Math.round(performance.now() - started),
   };
 }
@@ -411,6 +436,7 @@ async function generate(conversation) {
     repetition_score: prepared.repetition?.score || 0,
     repetition_retries: prepared.repetitionRetries || 0,
     addressed_intervention_ids: prepared.addressedInterventionIds || [],
+    intervention_fallback: prepared.interventionFallback,
     programme_introduction: programmeIntroduction,
   });
   conversation.telemetry.push({
@@ -425,6 +451,7 @@ async function generate(conversation) {
     repetition_score: prepared.repetition?.score || 0,
     repetition_retries: prepared.repetitionRetries || 0,
     addressed_intervention_ids: prepared.addressedInterventionIds || [],
+    intervention_fallback: prepared.interventionFallback,
   });
   await persist(conversation);
   return row;
