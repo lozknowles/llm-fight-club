@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-30 — Genuine grenade responses
+
+- Give the interrupted speaker the immediate next turn before the remaining participants respond.
+- Require a specific, natural response to the audience member's wording and tone rather than a canned acknowledgement.
+- Added private response evaluation so unrelated turns can no longer clear the intervention obligation.
+
 ## 2026-08-30 — Live Throw a Grenade intervention
 
 - Added typed and browser speech-recognised audience curve balls during a running show.

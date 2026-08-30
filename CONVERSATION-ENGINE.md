@@ -10,7 +10,7 @@ Interview questioners receive a private analysis of the preceding answer before 
 
 v0.1 remains turn-based. The browser reports speech completion (including measured duration or an explicit skip) to the engine. The engine will not generate the next turn while playback is outstanding.
 
-Audience intervention is an explicit lifecycle event. `submitAudienceIntervention` immediately settles any playing turn as interrupted, invalidates prefetched generation, records the curve ball, and marks every participant as pending acknowledgement. Each participant's next generated turn receives the intervention as mandatory context; acknowledgement is recorded turn-by-turn. The turn limit expands when necessary so all active participants can respond.
+Audience intervention is an explicit lifecycle event. `submitAudienceIntervention` immediately settles any playing turn as interrupted, invalidates prefetched generation, records the curve ball, and marks every participant as pending acknowledgement. The interrupted participant receives the immediate next turn, followed by the other participants. A strict private evaluator rejects replies that merely continue the prepared argument, use a stock acknowledgement or turn the interruption into a metaphor; bookkeeping clears only after a genuinely direct response. The turn limit expands when necessary so all active participants can respond.
 
 ## Formats
 

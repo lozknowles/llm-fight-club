@@ -40,9 +40,27 @@ test('audience intervention interrupts playback and requires every participant t
   assert.equal(conversation.transcript[0].audio_duration_ms,125);
   assert.equal(intervention.pendingParticipantIds.length,2);
   assert.equal(conversation.turnLimit,3);
-  speak(conversation);speak(conversation);
+  const first=beginTurn(conversation);
+  assert.equal(first.id,conversation.transcript[0].speaker_id);
+  recordTurn(conversation,{text:'Direct response',generation_latency_ms:1,addressed_intervention_ids:[intervention.id]});
+  completePlayback(conversation,{durationMs:250});
+  const second=beginTurn(conversation);
+  assert.notEqual(second.id,first.id);
+  recordTurn(conversation,{text:'Second direct response',generation_latency_ms:1,addressed_intervention_ids:[intervention.id]});
+  completePlayback(conversation,{durationMs:250});
   assert.equal(intervention.pendingParticipantIds.length,0);
   assert.equal(intervention.acknowledgedBy.length,2);
+});
+test('unrelated turns do not falsely clear an audience intervention',()=>{
+  const conversation=createConversation({format:'DEBATE',premise:'A',turnLimit:2,participants:[participant('for',0),participant('against',1)]});
+  beginTurn(conversation);recordTurn(conversation,{text:'Opening',generation_latency_ms:1});
+  const intervention=submitAudienceIntervention(conversation,'That is nonsense',{durationMs:50});
+  const responder=beginTurn(conversation);
+  recordTurn(conversation,{text:'A normal continuation',generation_latency_ms:1});
+  completePlayback(conversation,{durationMs:250});
+  assert.equal(responder.id,conversation.transcript[0].speaker_id);
+  assert.equal(intervention.pendingParticipantIds.length,2);
+  assert.equal(conversation.state,STATES.ACTIVE);
 });
 test('audience intervention rejects empty and overlong comments',()=>{
   const conversation=createConversation({format:'INTERVIEW',premise:'A',participants:[participant('interviewer',0),participant('guest',1)]});
