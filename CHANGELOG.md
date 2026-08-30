@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-30 - Classic local TTS comparison voices
+
+- Add isolated eSpeak NG 1.51 and Festival 2.5 speech providers without changing the qualified default voices.
+- Expose two clearly labelled eSpeak British variants and two Festival US voices as explicit `TEST` options.
+- Preserve independent participant speed controls and normalize classic output to browser-compatible 24 kHz mono WAV.
+- Add provider health, model and voice telemetry plus regression coverage for unique test voice identities.
+
 ## 2026-08-30 - Conversation repetition guard
 
 - Detect near-verbatim and heavily paraphrased repetition against each participant's recent turns.

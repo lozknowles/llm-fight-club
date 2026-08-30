@@ -4,6 +4,7 @@ import { HttpSpeechProvider } from './providers/http-speech-provider.mjs';
 import { OpenAISpeechProvider } from './providers/openai-speech-provider.mjs';
 import { ElevenLabsSpeechProvider } from './providers/elevenlabs-speech-provider.mjs';
 import { readStreamChunkWithTimeout } from './providers/speech-provider.mjs';
+import { CLASSIC_VOICES, CLASSIC_VOICE_IDS } from './classic-voices.mjs';
 
 const host = process.env.SPEECH_ROUTER_HOST || '127.0.0.1';
 const port = Number(process.env.SPEECH_ROUTER_PORT || 18772);
@@ -11,7 +12,19 @@ const allowedOrigin = process.env.SPEECH_ALLOWED_ORIGIN || 'http://127.0.0.1:187
 const identities = ['live-interviewer', 'live-guest', 'live-host'];
 const naturalVoices = ['natural-interviewer', 'natural-guest', 'natural-referee'];
 const fallbackVoices = ['awb', 'kal', 'kal16', 'rms', 'slt'];
-const allVoices = [...identities, ...naturalVoices, ...fallbackVoices];
+const allVoices = [...identities, ...naturalVoices, ...CLASSIC_VOICE_IDS, ...fallbackVoices];
+const voiceLabels = {
+  'live-interviewer': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Cedar interviewer',
+  'live-guest': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Marin guest',
+  'live-host': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Coral host/referee',
+  'natural-interviewer': 'STUDIO: Qwen3-TTS 1.7B local — interviewer',
+  'natural-guest': 'STUDIO: Qwen3-TTS 1.7B local — guest',
+  'natural-referee': 'STUDIO: Qwen3-TTS 1.7B local — referee',
+  awb: 'FALLBACK: Flite — AWB', kal: 'FALLBACK: Flite — Kal', kal16: 'FALLBACK: Flite — Kal 16 kHz',
+  rms: 'FALLBACK: Flite — RMS', slt: 'FALLBACK: Flite — SLT',
+  ...Object.fromEntries(CLASSIC_VOICES.map((voice) => [voice.id, voice.label])),
+};
+const voiceOptions = allVoices.map((id) => ({ id, label: voiceLabels[id] || id }));
 
 function optionalJson(name) {
   try { return JSON.parse(process.env[name] || '{}'); } catch { throw new Error(`${name} must be valid JSON`); }
@@ -47,16 +60,22 @@ const existing = new HttpSpeechProvider({
     'natural-referee': 'rms',
   },
 });
+const classic = new HttpSpeechProvider({
+  id: 'classic-local-tts',
+  voices: CLASSIC_VOICE_IDS,
+  baseUrl: process.env.CLASSIC_TTS_URL || 'http://127.0.0.1:18875',
+  capabilities: ['speech.local', 'speech.test'],
+});
 
-const providers = new Map([openai, elevenlabs, natural, existing].map((provider) => [provider.id, provider]));
+const providers = new Map([openai, elevenlabs, natural, classic, existing].map((provider) => [provider.id, provider]));
 const unavailableUntil = new Map();
 const firstByteTimeoutMs = Number(process.env.SPEECH_FIRST_BYTE_TIMEOUT_MS || 30000);
 const streamIdleTimeoutMs = Number(process.env.SPEECH_STREAM_IDLE_TIMEOUT_MS || 30000);
 export const ROUTING_PROFILES = {
-  LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'ffmpeg-flite'],
-  LIVE_QUALITY: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'qwen3-tts-voicedesign', 'ffmpeg-flite'],
-  STUDIO: ['qwen3-tts-voicedesign', 'openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'ffmpeg-flite'],
-  OFFLINE: ['qwen3-tts-voicedesign', 'ffmpeg-flite'],
+  LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'classic-local-tts', 'ffmpeg-flite'],
+  LIVE_QUALITY: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
+  STUDIO: ['qwen3-tts-voicedesign', 'openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'classic-local-tts', 'ffmpeg-flite'],
+  OFFLINE: ['qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
 };
 
 const headers = (type = 'application/json') => ({
@@ -185,7 +204,7 @@ const server = http.createServer(async (request, response) => {
       });
     }
     if (request.method === 'GET' && url.pathname === '/voices') {
-      return send(response, 200, { voices: allVoices, identities, profiles: Object.keys(ROUTING_PROFILES) });
+      return send(response, 200, { voices: allVoices, voiceOptions, identities, profiles: Object.keys(ROUTING_PROFILES) });
     }
     if (request.method === 'POST' && ['/synthesize', '/stream'].includes(url.pathname)) {
       const payload = await body(request);

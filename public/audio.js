@@ -12,6 +12,7 @@ if (disclosure) disclosure.textContent = 'AI-generated synthetic voices · turn-
 let config;
 let conversation;
 let voices = [];
+let voiceOptions = [];
 let audioUrl = null;
 let startedAt = 0;
 let settled = false;
@@ -212,7 +213,7 @@ function configure() {
 function fill() {
   for (const select of $$('.model')) select.innerHTML = config.models.map((model) => `<option>${model}</option>`).join('');
   for (const select of $$('.personality')) select.innerHTML = config.personalities.map((profile) => `<option value="${profile.id}">${profile.name}</option>`).join('');
-  for (const select of $$('.voice')) select.innerHTML = voices.map((voice) => `<option>${voice}</option>`).join('');
+  for (const select of $$('.voice')) select.innerHTML = voiceOptions.map((voice) => `<option value="${voice.id}">${voice.label}</option>`).join('');
   $$('.personality')[0].value = 'mara-vale';
   $$('.personality')[1].value = 'cedric-pump';
   $$('.personality')[2].value = 'nina-quark';
@@ -405,6 +406,8 @@ $$('.preview').forEach((button) => {
 });
 
 config = await api('/api/config');
-voices = (await fetch(`${ttsBase}/voices`).then((response) => response.json())).voices;
+const voiceResponse = await fetch(`${ttsBase}/voices`).then((response) => response.json());
+voices = voiceResponse.voices;
+voiceOptions = voiceResponse.voiceOptions || voices.map((id) => ({ id, label: id }));
 configure();
 fill();
