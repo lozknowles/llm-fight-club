@@ -154,21 +154,33 @@ async function playContainer(response, began) {
 async function speech(turn) {
   const began = performance.now();
   streamAbort = new AbortController();
-  const response = await fetch(`${ttsBase}/stream`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      text: turn.text,
-      voice: turn.voice,
-      deliveryHints: turn.delivery_hints || [],
-      delivery: $('#delivery').value,
-      format: conversation.format,
-      style: conversation.style,
+  const slowNotice = setTimeout(() => {
+    if (conversation?.awaitingPlayback) {
+      $('#status').textContent = `${conversation.format} · ACTIVE · ${conversation.transcript.length}/${conversation.turnLimit} · VOICE STILL PREPARING…`;
+    }
+  }, 3000);
+  let response;
+  try {
+    response = await fetch(`${ttsBase}/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text: turn.text,
+        voice: turn.voice,
+        deliveryHints: turn.delivery_hints || [],
+        delivery: $('#delivery').value,
+        format: conversation.format,
+        style: conversation.style,
       role: turn.role,
       profile: speechProfile,
-    }),
-    signal: streamAbort.signal,
-  });
+      conversationId: conversation.id,
+      turnId: turn.turn_id,
+      }),
+      signal: streamAbort.signal,
+    });
+  } finally {
+    clearTimeout(slowNotice);
+  }
   if (!response.ok) throw new Error(`TTS ${response.status}: ${await response.text()}`);
   metrics = responseMetrics(response, began);
   if (response.headers.get('x-audio-format') === 'pcm_s16le_24000_mono') await streamPcm(response, began);
@@ -228,12 +240,14 @@ function render() {
     const live = index === conversation.transcript.length - 1 && conversation.awaitingPlayback
       ? ` · first playable ${metrics.first_playable_ms ?? 'waiting'} ms · provider ${metrics.provider || 'routing'}`
       : '';
+    const audio = turn.audio_file ? ` · <a href="${endpoint(`/api/conversations/${conversation.id}/audio/${turn.turn_id}.wav`)}" download="turn-${turn.turn_index + 1}.wav">WAV</a>` : '';
     return `<article class="turn ${speaking}" style="--accent:${['#63d2ff', '#ff6b9a', '#ffd166'][participantIndex % 3]}">
       <b>${turn.speaker}</b> <span class="meta">${turn.role} · ${turn.model} · voice ${turn.voice}</span>
       <p>${turn.text}</p>
-      <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${live}</span>
+      <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${live}${audio}</span>
     </article>`;
   }).join('');
+  $('#audioExport').hidden = conversation.audio?.status !== 'ready';
 }
 
 function stopAudio() {
@@ -275,7 +289,10 @@ async function play(turn) {
   try {
     await speech(turn);
   } catch (error) {
-    if (error.name !== 'AbortError') throw error;
+    if (error.name === 'AbortError') return;
+    stopAudio();
+    $('#error').textContent = `${error.message}. Use “Skip speech” to continue.`;
+    $('#status').textContent = `${conversation.format} · VOICE ERROR · ${conversation.transcript.length}/${conversation.turnLimit}`;
   }
 }
 
@@ -310,6 +327,7 @@ $('#setup').onsubmit = async (event) => {
     $('#controls').style.display = 'block';
     $('#jsonExport').href = endpoint(`/api/conversations/${conversation.id}/export.json`);
     $('#mdExport').href = endpoint(`/api/conversations/${conversation.id}/export.md`);
+    $('#audioExport').href = endpoint(`/api/conversations/${conversation.id}/conversation.mp3`);
     render();
     await next();
   } catch (error) {

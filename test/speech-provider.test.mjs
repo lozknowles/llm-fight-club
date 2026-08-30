@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SpeechProvider } from '../speech/providers/speech-provider.mjs';
+import { SpeechProvider, readStreamChunkWithTimeout } from '../speech/providers/speech-provider.mjs';
 import { HttpSpeechProvider } from '../speech/providers/http-speech-provider.mjs';
 import { OpenAISpeechProvider } from '../speech/providers/openai-speech-provider.mjs';
 import { ElevenLabsSpeechProvider } from '../speech/providers/elevenlabs-speech-provider.mjs';
@@ -59,4 +59,12 @@ test('fallback voice mapping remains separate from voice identity', () => {
   });
   assert.equal(provider.fallbackVoices['natural-interviewer'], 'awb');
   assert.equal(provider.id, 'existing');
+});
+
+test('speech stream reads fail closed when a provider stops producing bytes', async () => {
+  const reader = { read: () => new Promise(() => {}) };
+  await assert.rejects(
+    readStreamChunkWithTimeout(reader, 5, 'Test provider'),
+    /Test provider timed out after 5 ms/,
+  );
 });

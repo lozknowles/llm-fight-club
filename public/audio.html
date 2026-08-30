@@ -31,7 +31,7 @@
       <label>DELIVERY<select id="delivery"><option selected>PASSIONATE</option><option>BALANCED</option><option>RESTRAINED</option></select></label>
     </div>
     <label>TOPIC / PREMISE<textarea id="premise" rows="3">Why does your Institute for Forward Pavements believe every town needs a Department of Strategic Queuing?</textarea></label>
-    <label>LENGTH<select id="turnLimit"><option value="4" selected>4 turns — short qualification</option><option value="8">8 turns</option></select></label>
+    <label>LENGTH (TURNS, 2–40)<input id="turnLimit" type="number" min="2" max="40" step="1" value="4"></label>
     <div class="grid">
       <section id="first" class="card participant" style="--accent:#63d2ff">
         <h2></h2>
@@ -64,7 +64,7 @@
     <button id="resume">Resume</button>
     <button id="skip">Skip speech</button>
     <button id="stop">Stop</button>
-    <a id="jsonExport">JSON</a> · <a id="mdExport">Markdown</a>
+    <a id="jsonExport">JSON</a> · <a id="mdExport">Markdown</a> · <a id="audioExport" hidden download="conversation.mp3">Conversation MP3</a>
   </section>
   <main id="transcript" aria-live="polite"></main>
   <audio id="player" preload="auto"></audio>

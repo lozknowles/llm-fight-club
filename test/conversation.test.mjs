@@ -6,3 +6,9 @@ test('debate uses the same engine with opposing roles',()=>{const c=createConver
 test('panel rotates host and two panelists',()=>{const c=createConversation({format:'PANEL',premise:'A topic',turnLimit:4,participants:[participant('host',0),participant('panelist',1),participant('panelist',2)]});assert.deepEqual([speak(c).role,speak(c).name,speak(c).name,speak(c).role],['host','P1','P2','host']);});
 test('cross-examination alternates examiner and witness',()=>{const c=createConversation({format:'CROSS_EXAMINATION',premise:'A claim',turnLimit:2,participants:[participant('examiner',0),participant('witness',1)]});assert.equal(speak(c).role,'examiner');assert.equal(speak(c).role,'witness');});
 test('all participants require distinct voices',()=>assert.throws(()=>createConversation({format:'INTERVIEW',premise:'A',participants:[participant('interviewer',0),{...participant('guest',1),voice:'v0'}]}),/distinct voice/));
+test('user-defined turn count is rounded and safely bounded',()=>{
+  const participants=[participant('interviewer',0),participant('guest',1)];
+  assert.equal(createConversation({format:'INTERVIEW',premise:'A',turnLimit:7.6,participants}).turnLimit,8);
+  assert.equal(createConversation({format:'INTERVIEW',premise:'A',turnLimit:100,participants}).turnLimit,40);
+  assert.equal(createConversation({format:'INTERVIEW',premise:'A',turnLimit:1,participants}).turnLimit,2);
+});

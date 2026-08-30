@@ -16,6 +16,8 @@ Browser
   <- WAV playback
   -> playback-complete acknowledgement
   -> next turn
+  -> TurnAudioStore -> per-turn WAV
+                    -> FFmpeg assembler -> conversation.mp3
 ```
 
 ## Conversation model
@@ -33,11 +35,15 @@ The engine owns state transitions. Neither an LLM nor speech provider can advanc
 
 ## Speech and playback
 
-Voice identity and delivery are separate. A participant chooses a stable synthetic voice identity while each generated turn supplies compact hints such as measured, dry, defensive or rapid. The speech router prefers Qwen and maps to a distinct Flite voice if natural synthesis is unavailable.
+Voice identity and delivery are separate. A participant chooses a stable synthetic voice identity while each generated turn supplies compact hints such as measured, dry, defensive or rapid. The speech router follows an explicit profile: `LIVE_FAST` starts with OpenAI streaming PCM, `STUDIO` starts with local Qwen VoiceDesign, and both retain distinct Flite voices as the final fallback.
 
 The LIVE path also accepts an allow-listed delivery intensity (`PASSIONATE`, `BALANCED` or `RESTRAINED`) plus format and role. The OpenAI provider combines these with the stable voice identity to direct emotional range, intonation, pace and emphasis. No raw provider prompt or API credential is exposed to the browser.
 
-The v0.2 transport returns a complete WAV. The browser plays it through one persistent audio element and calls `complete-playback` only after the `ended` event. Slow generation therefore delays a turn but never shortens or overlaps its real-time playback. The provider boundary permits future chunked/streaming speech, microphone input and interruption without changing conversation policy.
+The LIVE transport streams raw 24 kHz PCM from compatible providers into a Web Audio scheduler; container providers use the persistent audio element. The browser calls `complete-playback` only after the scheduled audio ends. Slow generation therefore delays a turn but never shortens or overlaps its real-time playback. After three seconds without headers the UI explicitly reports that the voice is still preparing. Router first-byte and stream-idle deadlines prevent a provider from hanging a programme indefinitely and allow pre-playback fallback to the next qualified provider.
+
+The same-origin application proxy tees each successful turn into `TurnAudioStore`. Raw PCM is wrapped in a canonical WAV header; other containers are preserved when already WAV or normalized with FFmpeg. On completion, `ConversationAudioAssembler` resamples the ordered turn files to 24 kHz mono, inserts a 350 ms pause between speakers and encodes `conversation.mp3`. This archive path is downstream of `ConversationEngine`: it cannot advance turns and does not alter provider selection or live playback causality.
+
+Conversation length is a user-supplied turn limit bounded to 2–40. Per-turn WAV routes and the final MP3 route validate conversation and turn identifiers against the conversation registry before reading the configured data directory. The registry is restored from persisted conversation JSON during application startup, preserving export URLs across service restarts.
 
 ## Deployment boundary
 
@@ -60,12 +66,15 @@ turn text -> speech profile -> provider-neutral router
                     |
                     v
         same-origin chunked response
-                    |
-                    v
-      Web Audio PCM scheduler / audio element
-                    |
-                    v
-       playback-complete acknowledgement
+             /              \
+            v                v
+ TurnAudioStore       Web Audio PCM scheduler
+      |                       |
+      v                       v
+ per-turn WAV          playback-complete acknowledgement
+      |
+      v
+ FFmpeg + 350 ms gaps -> conversation.mp3
 ```
 
 While turn A is audible, the server may prepare turn B on a cloned conversation snapshot containing A's final text. The prepared result is committed only after A's playback acknowledgement and only if the selected participant and transcript length still match. This preserves causal ordering while removing most next-turn LLM latency from the audible gap.

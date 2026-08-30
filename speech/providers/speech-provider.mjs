@@ -31,3 +31,17 @@ export class SpeechProvider {
 export async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
   return fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(timeoutMs) });
 }
+
+export async function readStreamChunkWithTimeout(reader, timeoutMs, label = 'Audio stream') {
+  let timer;
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs} ms`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-08-30 - Conversation audio archive
+
+- Save every successfully synthesized turn as an individually downloadable WAV file.
+- Assemble completed or deliberately stopped conversations into a normalized 128 kbps MP3 with 350 ms inter-speaker gaps.
+- Add `conversation.mp3` and per-turn WAV download links alongside JSON and Markdown exports.
+- Replace the fixed 4/8-turn selector with a user-defined 2–40 turn length.
+- Restore saved conversation records at application startup so existing audio exports survive service restarts.
+- Add regression coverage for audio archival, MP3 assembly and turn-limit bounds.
+
+## 2026-08-30 - Speech stall recovery
+
+- Show an explicit `VOICE STILL PREPARING` state when a natural speech request takes longer than three seconds.
+- Bound provider first-byte and mid-stream waits so an upstream TTS connection cannot hang indefinitely.
+- Surface recoverable voice errors while keeping `Skip speech` available to advance the conversation.
+- Add regression coverage for stalled speech streams.
+
 ## 2026-08-30 - Browser preview PCM compatibility
 
 - Wrap raw 24 kHz mono PCM responses in a WAV container before voice-preview playback.

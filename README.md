@@ -9,9 +9,10 @@ The intended experience is asynchronous generation followed by real-time listeni
 - Two local OpenAI-compatible LLM endpoints.
 - `ConversationEngine` plus format-specific turn policies.
 - Provider-neutral `SpeechProvider` boundary.
+- OpenAI `gpt-4o-mini-tts` streaming PCM for the live natural voice identities.
 - Qwen3-TTS 12Hz 1.7B VoiceDesign for natural voices and per-line delivery hints.
 - FFmpeg/Flite `awb`, `slt` and `rms` voices as an automatic fallback.
-- Persistent JSON/Markdown transcripts and turn telemetry.
+- Persistent JSON/Markdown transcripts, per-turn WAV recordings, a stitched conversation MP3 and turn telemetry.
 
 The built-in natural performers are original synthetic characters. The application does not clone or imitate real people.
 
@@ -29,6 +30,8 @@ Open `/audio.html`. The browser uses same-origin `/api/` and `/tts/` routes, so 
 
 The delivery selector defaults to `PASSIONATE`. It changes performance direction—emotional commitment, emphasis, pace and rebuttal energy—while keeping the selected synthetic voice identity stable. `BALANCED` and `RESTRAINED` are available for interviews or quieter programmes.
 
+Length is user-defined from 2 to 40 turns. Every synthesized turn is archived as an individual WAV. When a conversation completes—or is stopped after at least one recorded turn—the server uses FFmpeg to normalize the saved turns, inserts a 350 ms inter-speaker pause and publishes `conversation.mp3`. JSON, Markdown, per-turn WAV and MP3 downloads remain separate exports. Saved conversations are restored from the configured data directory when the application restarts, so their export URLs remain valid.
+
 ## Verification
 
 ```bash
@@ -36,6 +39,8 @@ npm test
 node scripts/qualify-speech-router.mjs
 node scripts/qualify-natural-live-loop.mjs
 ```
+
+The test suite also verifies PCM-to-WAV archival, bounded speech-stream reads and MP3 assembly arguments. Runtime MP3 production requires FFmpeg with `libmp3lame` support.
 
 See `NATURAL-TTS-QUALIFICATION.md`, `QUALIFICATION-V2.md` and `ARCHITECTURE.md` for evidence and design details.
 
@@ -45,4 +50,4 @@ The isolated `feature/tts-latency-bakeoff` branch adds purpose profiles, OpenAI 
 
 ## Privacy and release
 
-Conversation transcripts are stored server-side under the configured data directory. An unlisted URL is not authentication; production operators should add authentication or rate limiting before treating the service as private. No homepage or navigation link is required.
+Conversation transcripts and generated audio are stored server-side under the configured data directory. An unlisted URL is not authentication; production operators should add authentication, retention controls or rate limiting before treating the service as private. No homepage or navigation link is required.

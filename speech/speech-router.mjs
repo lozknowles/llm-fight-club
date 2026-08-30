@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { HttpSpeechProvider } from './providers/http-speech-provider.mjs';
 import { OpenAISpeechProvider } from './providers/openai-speech-provider.mjs';
 import { ElevenLabsSpeechProvider } from './providers/elevenlabs-speech-provider.mjs';
+import { readStreamChunkWithTimeout } from './providers/speech-provider.mjs';
 
 const host = process.env.SPEECH_ROUTER_HOST || '127.0.0.1';
 const port = Number(process.env.SPEECH_ROUTER_PORT || 18772);
@@ -49,6 +50,8 @@ const existing = new HttpSpeechProvider({
 
 const providers = new Map([openai, elevenlabs, natural, existing].map((provider) => [provider.id, provider]));
 const unavailableUntil = new Map();
+const firstByteTimeoutMs = Number(process.env.SPEECH_FIRST_BYTE_TIMEOUT_MS || 30000);
+const streamIdleTimeoutMs = Number(process.env.SPEECH_STREAM_IDLE_TIMEOUT_MS || 30000);
 export const ROUTING_PROFILES = {
   LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'ffmpeg-flite'],
   LIVE_QUALITY: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'qwen3-tts-voicedesign', 'ffmpeg-flite'],
@@ -107,17 +110,19 @@ async function openFirstAudio(payload) {
       continue;
     }
     const providerStarted = performance.now();
+    let reader;
     try {
       const upstream = await provider.synthesizeStream(payload);
       if (!upstream.ok) throw new Error(`HTTP ${upstream.status}: ${(await upstream.text()).slice(0, 240)}`);
       if (!upstream.body) throw new Error('Provider returned no audio body');
-      const reader = upstream.body.getReader();
-      const first = await reader.read();
+      reader = upstream.body.getReader();
+      const first = await readStreamChunkWithTimeout(reader, firstByteTimeoutMs, `${provider.id} first audio byte`);
       if (first.done || !first.value?.byteLength) throw new Error('Provider returned an empty audio stream');
       const firstByteMs = Math.round(performance.now() - requestStarted);
       attempts.push({ provider: provider.id, outcome: 'selected', latencyMs: Math.round(performance.now() - providerStarted) });
       return { profile, provider, upstream, reader, first: first.value, firstByteMs, attempts };
     } catch (error) {
+      if (reader) await reader.cancel(error.message).catch(() => {});
       attempts.push({ provider: provider.id, outcome: 'failed', latencyMs: Math.round(performance.now() - providerStarted), error: error.message.slice(0, 160) });
       unavailableUntil.set(provider.id, Date.now() + Number(process.env.SPEECH_FAILURE_COOLDOWN_MS || 60000));
     }
@@ -141,7 +146,7 @@ async function streamAudio(response, result) {
   response.writeHead(200, audioHeaders(result));
   response.write(result.first);
   while (true) {
-    const chunk = await result.reader.read();
+    const chunk = await readStreamChunkWithTimeout(result.reader, streamIdleTimeoutMs, `${result.provider.id} audio stream`);
     if (chunk.done) break;
     response.write(chunk.value);
   }
@@ -150,7 +155,7 @@ async function streamAudio(response, result) {
 async function completeAudio(response, result) {
   const chunks = [Buffer.from(result.first)];
   while (true) {
-    const chunk = await result.reader.read();
+    const chunk = await readStreamChunkWithTimeout(result.reader, streamIdleTimeoutMs, `${result.provider.id} audio stream`);
     if (chunk.done) break;
     chunks.push(Buffer.from(chunk.value));
   }

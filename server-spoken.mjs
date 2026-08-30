@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createConversation, beginTurn, recordTurn, completePlayback, pause, resume, stop, PERSONALITIES, FORMATS } from './lib/conversation-engine-spoken.mjs';
 import { ModelRouter } from './lib/model-router.mjs';
+import { assembleConversationMp3, conversationMp3Path, saveTurnAudio, turnAudioPath } from './lib/audio-archive.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(root, 'public');
@@ -14,6 +15,23 @@ const models = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_UR
 const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:18772';
 const conversations = new Map();
 const prefetches = new Map();
+
+async function restoreConversations() {
+  const directory = path.join(dataDir, 'conversations');
+  let entries = [];
+  try { entries = await fs.readdir(directory, { withFileTypes: true }); } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    try {
+      const conversation = JSON.parse(await fs.readFile(path.join(directory, entry.name), 'utf8'));
+      if (conversation?.id && Array.isArray(conversation.transcript)) conversations.set(conversation.id, conversation);
+    } catch (error) {
+      console.warn(`Could not restore ${entry.name}: ${error.message}`);
+    }
+  }
+}
 
 const send = (response, status, value, type = 'application/json; charset=utf-8') => {
   response.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
@@ -50,10 +68,28 @@ async function proxySpeech(request, response, pathname) {
     response.writeHead(upstream.status, headers);
     return response.end(bytes);
   }
+  const conversation = payload?.conversationId ? conversations.get(String(payload.conversationId)) : null;
+  const turn = conversation?.transcript.find((item) => item.turn_id === payload?.turnId);
+  const archive = turn && turn.text === payload.text && turn.voice === payload.voice;
+  const audioChunks = [];
   response.writeHead(upstream.status, headers);
   if (!upstream.body) return response.end();
-  for await (const chunk of upstream.body) response.write(chunk);
+  for await (const chunk of upstream.body) {
+    response.write(chunk);
+    if (archive) audioChunks.push(Buffer.from(chunk));
+  }
   response.end();
+  if (archive && audioChunks.length) {
+    await saveTurnAudio({
+      dataDir,
+      conversationId: conversation.id,
+      turnId: turn.turn_id,
+      bytes: Buffer.concat(audioChunks),
+      audioFormat: headers['x-audio-format'],
+    });
+    turn.audio_file = `${turn.turn_id}.wav`;
+    await persist(conversation);
+  }
 }
 async function persist(conversation) {
   await fs.mkdir(path.join(dataDir, 'conversations'), { recursive: true });
@@ -167,6 +203,26 @@ async function generate(conversation) {
 
 const markdown = (conversation) => `# ${conversation.format}: ${conversation.premise}\n\n${conversation.transcript.map((turn) => `## ${turn.speaker} — ${turn.role}\n\n${turn.text}\n\n_Model: ${turn.model}; voice: ${turn.voice}; TTS: ${turn.tts_provider}; LLM: ${turn.generation_latency_ms} ms; TTS generation: ${turn.tts_generation_latency_ms} ms; playback: ${turn.audio_duration_ms ?? 'pending'} ms_`).join('\n\n')}`;
 
+async function buildAudioExport(conversation) {
+  try {
+    const result = await assembleConversationMp3({ dataDir, conversation, gapMs: 350 });
+    conversation.audio = { status: 'ready', file: 'conversation.mp3', turn_count: result.turnCount, inter_turn_gap_ms: result.gapMs };
+  } catch (error) {
+    conversation.audio = { status: 'error', error: error.message };
+  }
+}
+
+async function sendAudio(response, file, type, downloadName) {
+  const bytes = await fs.readFile(file);
+  response.writeHead(200, {
+    'content-type': type,
+    'content-length': String(bytes.length),
+    'content-disposition': `attachment; filename="${downloadName}"`,
+    'cache-control': 'private, no-store',
+  });
+  response.end(bytes);
+}
+
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
@@ -185,6 +241,19 @@ const server = http.createServer(async (request, response) => {
       const conversation = conversations.get(exportMatch[1]);
       if (!conversation) return send(response, 404, { error: 'Conversation not found' });
       return exportMatch[2] === 'json' ? send(response, 200, conversation) : send(response, 200, markdown(conversation), 'text/markdown; charset=utf-8');
+    }
+    const turnAudioMatch = url.pathname.match(/^\/api\/conversations\/([\w-]+)\/audio\/([\w-]+)\.wav$/);
+    if (request.method === 'GET' && turnAudioMatch) {
+      const conversation = conversations.get(turnAudioMatch[1]);
+      const turn = conversation?.transcript.find((item) => item.turn_id === turnAudioMatch[2] && item.audio_file);
+      if (!turn) return send(response, 404, { error: 'Turn audio not found' });
+      return await sendAudio(response, turnAudioPath(dataDir, conversation.id, turn.turn_id), 'audio/wav', `turn-${turn.turn_index + 1}.wav`);
+    }
+    const conversationAudioMatch = url.pathname.match(/^\/api\/conversations\/([\w-]+)\/conversation\.mp3$/);
+    if (request.method === 'GET' && conversationAudioMatch) {
+      const conversation = conversations.get(conversationAudioMatch[1]);
+      if (!conversation || conversation.audio?.status !== 'ready') return send(response, 404, { error: 'Conversation audio not ready' });
+      return await sendAudio(response, conversationMp3Path(dataDir, conversation.id), 'audio/mpeg', 'conversation.mp3');
     }
     const match = url.pathname.match(/^\/api\/conversations\/([\w-]+)(?:\/(next|prefetch|complete-playback|pause|resume|stop))?$/);
     if (match) {
@@ -205,10 +274,21 @@ const server = http.createServer(async (request, response) => {
         }
         return send(response, 202, { status: 'preparing', transcriptLength: conversation.transcript.length });
       }
-      if (action === 'complete-playback') { completePlayback(conversation, payload); await persist(conversation); return send(response, 200, conversation); }
+      if (action === 'complete-playback') {
+        completePlayback(conversation, payload);
+        if (conversation.state === 'COMPLETED') await buildAudioExport(conversation);
+        await persist(conversation);
+        return send(response, 200, conversation);
+      }
       if (action === 'pause') { pause(conversation); await persist(conversation); return send(response, 200, conversation); }
       if (action === 'resume') { resume(conversation); await persist(conversation); return send(response, 200, conversation); }
-      if (action === 'stop') { prefetches.delete(conversation.id); stop(conversation); await persist(conversation); return send(response, 200, conversation); }
+      if (action === 'stop') {
+        prefetches.delete(conversation.id);
+        stop(conversation);
+        if (conversation.transcript.some((turn) => turn.audio_file)) await buildAudioExport(conversation);
+        await persist(conversation);
+        return send(response, 200, conversation);
+      }
     }
     if (request.method === 'GET') {
       const file = url.pathname === '/' ? 'show.html' : path.basename(url.pathname);
@@ -223,6 +303,7 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
+await restoreConversations();
 server.listen(Number(process.env.PORT || 18770), process.env.HOST || '127.0.0.1', () => {
   console.log(`Spoken conversation engine listening on http://${process.env.HOST || '127.0.0.1'}:${process.env.PORT || 18770}`);
 });
