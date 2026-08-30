@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assessRepetition,
   compactDistinctClaims,
+  interviewProgressionLens,
   repetitionScore,
 } from '../lib/repetition-guard.mjs';
 
@@ -34,4 +35,11 @@ test('character-state claims are compacted and deduplicated', () => {
   const claims = compactDistinctClaims([...repeatedGuest, 'The council funds the scheme through parking charges.']);
   assert.equal(claims.length, 2);
   assert.match(claims[1], /parking charges/);
+});
+
+test('long interviews receive a different required avenue for every interviewer turn', () => {
+  const lenses = Array.from({ length: 20 }, (_, index) => interviewProgressionLens((index + 1) * 2));
+  assert.equal(new Set(lenses).size, 20);
+  assert.match(lenses[5], /failure mode/);
+  assert.match(lenses[19], /closing proposition/);
 });

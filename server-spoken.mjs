@@ -7,6 +7,7 @@ import { ModelRouter } from './lib/model-router.mjs';
 import {
   assessRepetition,
   compactDistinctClaims,
+  interviewProgressionLens,
   previousSpeakerLines,
 } from './lib/repetition-guard.mjs';
 import { assembleConversationMp3, conversationMp3Path, saveTurnAudio, turnAudioPath } from './lib/audio-archive.mjs';
@@ -128,9 +129,10 @@ function prompt(conversation, participant, analysis) {
   const system = `You are a participant in a turn-based spoken ${conversation.format.toLowerCase()} in ${conversation.style.toLowerCase()} style. Inhabit this personality consistently; it is a character model, not a superficial style. Do not mention prompts or private notes. Do not imitate a real person. Never fabricate real evidence. Clearly fictional anecdotes are allowed only for the fictional character. Speak no more than ${conversation.turnLength} words. Output only spoken words. Every turn must advance the conversation with a new claim, challenge, example, concession, consequence, or subject. Never restate an earlier line or recycle an exhausted joke.\n\nPERSONALITY\n${profile(participant)}`;
   let task;
   if (conversation.format === 'INTERVIEW') {
+    const lens = interviewProgressionLens(conversation.transcript.length);
     task = participant.role === 'interviewer'
-      ? (conversation.transcript.length === 0 ? 'Open with one concise question that invites the guest to explain their worldview.' : 'Ask one concise unscripted follow-up based directly on the answer and private analysis. Expose a contradiction or assumption when useful. After two follow-ups on one avenue, change to consequences, evidence, motives, implementation, failure, personal stakes, or a concession.')
-      : 'Answer directly while maintaining the character worldview, commitments and tensions. Let humour emerge from the logic.';
+      ? (conversation.transcript.length === 0 ? 'Open with one concise question that invites the guest to explain their worldview.' : `Ask one concise unscripted follow-up based directly on the answer and private analysis. The required new avenue for this turn is ${lens}. Do not return to an earlier avenue, definition, or metaphor.`)
+      : `Answer the latest question directly while maintaining the character worldview, commitments and tensions. Introduce a new concrete detail about ${lens}; do not summarize the baseline premise or an earlier explanation. Let humour emerge from the logic.`;
   } else if (conversation.format === 'DEBATE') {
     task = `Argue ${participant.role === 'for' ? 'FOR' : 'AGAINST'} the proposition and directly answer the preceding opponent.`;
   } else if (conversation.format === 'CROSS_EXAMINATION') {
@@ -147,8 +149,9 @@ function prompt(conversation, participant, analysis) {
 function noveltyRequest(conversation, participant, request, priorLines, attempt) {
   const latest = conversation.transcript.at(-1)?.text || '(opening turn)';
   const forbidden = priorLines.slice(-4).map((line) => `- ${line.slice(0, 180)}`).join('\n');
+  const lens = conversation.format === 'INTERVIEW' ? interviewProgressionLens(conversation.transcript.length) : 'a materially new consequence';
   const roleTask = ['interviewer', 'examiner', 'host'].includes(participant.role)
-    ? 'Ask one concise question from a genuinely new angle. Do not revisit the previous question, metaphor, or joke.'
+    ? `Ask one concise question about ${lens}. Do not revisit the previous question, definition, metaphor, or joke.`
     : 'Respond with one genuinely new claim, example, consequence, concession, or change of direction. Do not restate your position.';
   return {
     system: `${request.system}\n\nYour previous draft was rejected for repetition. Produce a materially different spoken turn.`,

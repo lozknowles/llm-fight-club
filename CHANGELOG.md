@@ -4,7 +4,7 @@
 
 - Detect near-verbatim and heavily paraphrased repetition against each participant's recent turns.
 - Retry rejected drafts with a compact prompt that forbids exhausted lines and requires a new conversational angle.
-- Require interviewers to change avenue after two follow-ups on the same thread.
+- Give long interviews a 20-stage progression through evidence, incentives, consequences, failure, accountability, concession and closure.
 - Compact and deduplicate character-state claims before returning them to model context.
 - Record repetition scores and retry counts in turn telemetry.
 - Add regression coverage for looping dialogue, legitimate new angles and claim compaction.
