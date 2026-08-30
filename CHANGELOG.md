@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-30 — Panel programme introducer
+
+- Relabelled the panel host as `Introducer / Host` in setup.
+- Added an audible opening that states the subject, introduces every selected panel personality by name and asks the first question.
+- Protected the programme introduction from autonomous interruption while keeping all subsequent panel discussion interruptible.
+
 ## 2026-08-30 — Autonomous LLM barge-in
 
 - Added typed `LISTEN`, `PREPARE` and `INTERRUPT` listener decisions driven by a small local monitor at three playback-synchronised checkpoints.

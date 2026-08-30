@@ -66,6 +66,8 @@ The monitor returns a typed `LISTEN`, `PREPARE` or `INTERRUPT` decision with a r
 
 Debate can optionally add a third, distinct-voice referee. The referee participates only when the listener policy identifies evasion, contradiction, missing factual grounding or a point of order. Per-personality interruption frequency, patience, assertiveness, politeness, argumentativeness and comic timing influence the director threshold without becoming deterministic rules.
 
+Panel mode begins with an audible programme introduction from the selected host voice. The introducer states the subject, names each selected panel personality with a brief faithful description, and asks the opening question. Autonomous listeners cannot barge into this opening; normal panel interruption policy begins with the first substantive response.
+
 Run the focused live qualification with:
 
 ```bash

@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createConversation, beginTurn, recordTurn, completePlayback, pause, resume, stop, submitAudienceIntervention, commitModelInterruption, PERSONALITIES, FORMATS, INTERRUPTION_LEVELS } from './lib/conversation-engine-spoken.mjs';
+import { createConversation, beginTurn, recordTurn, completePlayback, pause, resume, stop, submitAudienceIntervention, commitModelInterruption, panelIntroductionBrief, PERSONALITIES, FORMATS, INTERRUPTION_LEVELS } from './lib/conversation-engine-spoken.mjs';
 import { ModelRouter } from './lib/model-router.mjs';
 import {
   assessRepetition,
@@ -173,7 +173,13 @@ function prompt(conversation, participant, analysis) {
   } else if (conversation.format === 'CROSS_EXAMINATION') {
     task = participant.role === 'examiner' ? 'Ask one rigorous concise question; press evasion or inconsistency without abuse.' : 'Answer in character; preserve commitments even when defensive.';
   } else {
-    task = participant.role === 'host' ? 'Moderate dynamically with one concise question based on the latest exchange.' : 'Respond directly to the host or another panelist while preserving character.';
+    if (participant.role === 'host' && conversation.transcript.length === 0) {
+      const introduction = panelIntroductionBrief(conversation);
+      const introductions = introduction.panelists.map((item) => `${item.name}${item.description ? ` — ${item.description}` : ''}`).join('; ');
+      task = `Open the panel programme as ${introduction.hostName}. State the exact discussion subject: “${introduction.subject}”. Then introduce every selected panel personality by name using this roster: ${introductions}. Keep each description brief and faithful. Finish with one concise opening question to the panel. Do not begin debating the subject yourself.`;
+    } else {
+      task = participant.role === 'host' ? 'Moderate dynamically with one concise question based on the latest exchange.' : 'Respond directly to the host or another panelist while preserving character.';
+    }
   }
   if (pending.length) task = `Address the audience member's interruption as a person, in character. Make your first sentence an unmistakably direct and non-generic reaction to what they actually said. Then give a substantive answer. Do not preface the reply with your own name.`;
   let modelInterventionContext = '';
@@ -230,6 +236,7 @@ async function evaluateBargeIn(conversation, payload) {
   if ((conversation.audienceInterventions || []).some((item) => item.pendingParticipantIds?.length)) return { action: 'LISTEN', reason: 'Audience intervention has priority' };
   const row = conversation.transcript.at(-1);
   if (!row || row.turn_id !== payload.turnId) throw new Error('The audible turn changed');
+  if (row.programme_introduction) return { action: 'LISTEN', reason: 'Programme introductions are not interruptible' };
   if (row.autonomous_interruption || row.interruption_reaction || row.interrupted) return { action: 'LISTEN', reason: 'Interruption exchange cooldown' };
   const words = String(row.text || '').trim().split(/\s+/).filter(Boolean);
   const heardWordCount = Math.max(1, Math.min(words.length, Math.round(Number(payload.heardWordCount)) || 1));
@@ -385,6 +392,7 @@ async function generate(conversation) {
     conversation.directorMemory = conversation.directorMemory.slice(-8);
   }
   const result = prepared.result;
+  const programmeIntroduction = conversation.format === 'PANEL' && conversation.transcript.length === 0 && participant.role === 'host';
   const row = recordTurn(conversation, {
     text: result.text,
     provider: result.provider,
@@ -403,6 +411,7 @@ async function generate(conversation) {
     repetition_score: prepared.repetition?.score || 0,
     repetition_retries: prepared.repetitionRetries || 0,
     addressed_intervention_ids: prepared.addressedInterventionIds || [],
+    programme_introduction: programmeIntroduction,
   });
   conversation.telemetry.push({
     turn_id: row.turn_id,
