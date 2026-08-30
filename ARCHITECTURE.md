@@ -42,3 +42,28 @@ The v0.2 transport returns a complete WAV. The browser plays it through one pers
 Only the conversation application is reverse-proxied publicly. LLM and speech-provider ports remain on loopback or the private Tailscale interface. Browser speech calls pass through the application's same-origin `/tts/` proxy, allowing deployment under an unlisted URL prefix without CORS exposure.
 
 Agent Control is not imported or modified. Its protected services remain operationally separate.
+
+## LIVE streaming extension
+
+The bake-off branch adds a streaming transport without changing ConversationEngine:
+
+```text
+turn text -> speech profile -> provider-neutral router
+  LIVE_FAST    -> OpenAI PCM -> ElevenLabs stream -> Flite
+  LIVE_QUALITY -> OpenAI PCM -> ElevenLabs stream -> Qwen -> Flite
+  STUDIO       -> Qwen -> cloud alternatives -> Flite
+  OFFLINE      -> Qwen -> Flite
+                    |
+                    v
+        same-origin chunked response
+                    |
+                    v
+      Web Audio PCM scheduler / audio element
+                    |
+                    v
+       playback-complete acknowledgement
+```
+
+While turn A is audible, the server may prepare turn B on a cloned conversation snapshot containing A's final text. The prepared result is committed only after A's playback acknowledgement and only if the selected participant and transcript length still match. This preserves causal ordering while removing most next-turn LLM latency from the audible gap.
+
+The application router is a qualified prototype, not a replacement for Agent Control. Its profile/capability vocabulary maps directly to Agent Control provider resources and a future verified `speech.synthesize@1` job action.

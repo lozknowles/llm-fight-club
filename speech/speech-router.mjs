@@ -1,27 +1,60 @@
 import http from 'node:http';
+import { performance } from 'node:perf_hooks';
 import { HttpSpeechProvider } from './providers/http-speech-provider.mjs';
+import { OpenAISpeechProvider } from './providers/openai-speech-provider.mjs';
+import { ElevenLabsSpeechProvider } from './providers/elevenlabs-speech-provider.mjs';
 
 const host = process.env.SPEECH_ROUTER_HOST || '127.0.0.1';
 const port = Number(process.env.SPEECH_ROUTER_PORT || 18772);
 const allowedOrigin = process.env.SPEECH_ALLOWED_ORIGIN || 'http://127.0.0.1:18770';
+const identities = ['live-interviewer', 'live-guest', 'live-host'];
 const naturalVoices = ['natural-interviewer', 'natural-guest', 'natural-referee'];
 const fallbackVoices = ['awb', 'kal', 'kal16', 'rms', 'slt'];
+const allVoices = [...identities, ...naturalVoices, ...fallbackVoices];
 
+function optionalJson(name) {
+  try { return JSON.parse(process.env[name] || '{}'); } catch { throw new Error(`${name} must be valid JSON`); }
+}
+
+const openai = new OpenAISpeechProvider({ apiKey: process.env.OPENAI_API_KEY });
+const elevenlabs = new ElevenLabsSpeechProvider({
+  apiKey: process.env.ELEVENLABS_API_KEY,
+  voiceMap: optionalJson('ELEVENLABS_VOICE_MAP'),
+});
 const natural = new HttpSpeechProvider({
   id: 'qwen3-tts-voicedesign',
-  voices: naturalVoices,
+  voices: [...naturalVoices, ...identities],
   baseUrl: process.env.NATURAL_TTS_URL || 'http://127.0.0.1:18773',
+  capabilities: ['speech.studio', 'speech.local', 'speech.postprocess'],
+  fallbackVoices: {
+    'live-interviewer': 'natural-interviewer',
+    'live-guest': 'natural-guest',
+    'live-host': 'natural-referee',
+  },
 });
 const existing = new HttpSpeechProvider({
   id: 'ffmpeg-flite',
-  voices: fallbackVoices,
+  voices: allVoices,
   baseUrl: process.env.FLITE_TTS_URL || 'http://127.0.0.1:18774',
+  capabilities: ['speech.live', 'speech.local'],
   fallbackVoices: {
+    'live-interviewer': 'awb',
+    'live-guest': 'slt',
+    'live-host': 'rms',
     'natural-interviewer': 'awb',
     'natural-guest': 'slt',
     'natural-referee': 'rms',
   },
 });
+
+const providers = new Map([openai, elevenlabs, natural, existing].map((provider) => [provider.id, provider]));
+const unavailableUntil = new Map();
+export const ROUTING_PROFILES = {
+  LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'ffmpeg-flite'],
+  LIVE_QUALITY: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'qwen3-tts-voicedesign', 'ffmpeg-flite'],
+  STUDIO: ['qwen3-tts-voicedesign', 'openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'ffmpeg-flite'],
+  OFFLINE: ['qwen3-tts-voicedesign', 'ffmpeg-flite'],
+};
 
 const headers = (type = 'application/json') => ({
   'content-type': type,
@@ -43,10 +76,87 @@ async function body(request) {
 }
 async function providerHealth(provider) {
   try {
-    return { available: true, ...(await provider.health()) };
+    const result = await provider.health();
+    return { available: result.available !== false && result.status !== 'unconfigured', ...result };
   } catch (error) {
     return { available: false, error: error.message };
   }
+}
+async function eligibleProviders(profile, voice) {
+  const ids = ROUTING_PROFILES[profile];
+  if (!ids) throw new Error(`Unknown speech profile ${profile}`);
+  const selected = [];
+  for (const id of ids) {
+    const provider = providers.get(id);
+    if (!provider?.supports(voice)) continue;
+    const health = await providerHealth(provider);
+    if (health.available) selected.push(provider);
+  }
+  return selected;
+}
+async function openFirstAudio(payload) {
+  const profile = String(payload.profile || process.env.SPEECH_DEFAULT_PROFILE || 'LIVE_FAST').toUpperCase();
+  const candidates = await eligibleProviders(profile, payload.voice);
+  if (!candidates.length) throw new Error(`No qualified provider for ${profile}/${payload.voice}`);
+  const attempts = [];
+  const requestStarted = performance.now();
+  for (const provider of candidates) {
+    const retryAt = unavailableUntil.get(provider.id) || 0;
+    if (retryAt > Date.now()) {
+      attempts.push({ provider: provider.id, outcome: 'circuit-open', retryInMs: retryAt - Date.now() });
+      continue;
+    }
+    const providerStarted = performance.now();
+    try {
+      const upstream = await provider.synthesizeStream(payload);
+      if (!upstream.ok) throw new Error(`HTTP ${upstream.status}: ${(await upstream.text()).slice(0, 240)}`);
+      if (!upstream.body) throw new Error('Provider returned no audio body');
+      const reader = upstream.body.getReader();
+      const first = await reader.read();
+      if (first.done || !first.value?.byteLength) throw new Error('Provider returned an empty audio stream');
+      const firstByteMs = Math.round(performance.now() - requestStarted);
+      attempts.push({ provider: provider.id, outcome: 'selected', latencyMs: Math.round(performance.now() - providerStarted) });
+      return { profile, provider, upstream, reader, first: first.value, firstByteMs, attempts };
+    } catch (error) {
+      attempts.push({ provider: provider.id, outcome: 'failed', latencyMs: Math.round(performance.now() - providerStarted), error: error.message.slice(0, 160) });
+      unavailableUntil.set(provider.id, Date.now() + Number(process.env.SPEECH_FAILURE_COOLDOWN_MS || 60000));
+    }
+  }
+  throw new Error(`All speech providers failed: ${attempts.map((item) => `${item.provider}=${item.error}`).join('; ')}`);
+}
+function audioHeaders(result) {
+  return {
+    ...headers(result.upstream.headers.get('content-type') || 'application/octet-stream'),
+    'x-tts-provider': result.provider.id,
+    'x-tts-model': result.upstream.headers.get('x-tts-model') || result.provider.model || result.provider.id,
+    'x-tts-voice': result.provider.resolveVoice(result.payloadVoice || ''),
+    'x-tts-profile': result.profile,
+    'x-tts-first-byte-ms': String(result.firstByteMs),
+    'x-tts-fallback': String(result.attempts.some((item) => item.outcome !== 'selected')),
+    'x-tts-attempts': encodeURIComponent(JSON.stringify(result.attempts)),
+    'x-audio-format': result.provider.id === 'openai-gpt-4o-mini-tts' ? 'pcm_s16le_24000_mono' : 'container',
+  };
+}
+async function streamAudio(response, result) {
+  response.writeHead(200, audioHeaders(result));
+  response.write(result.first);
+  while (true) {
+    const chunk = await result.reader.read();
+    if (chunk.done) break;
+    response.write(chunk.value);
+  }
+  response.end();
+}
+async function completeAudio(response, result) {
+  const chunks = [Buffer.from(result.first)];
+  while (true) {
+    const chunk = await result.reader.read();
+    if (chunk.done) break;
+    chunks.push(Buffer.from(chunk.value));
+  }
+  const audio = Buffer.concat(chunks);
+  response.writeHead(200, { ...audioHeaders(result), 'content-length': String(audio.length) });
+  response.end(audio);
 }
 
 const server = http.createServer(async (request, response) => {
@@ -61,56 +171,32 @@ const server = http.createServer(async (request, response) => {
       return response.end();
     }
     if (request.method === 'GET' && url.pathname === '/health') {
-      const [naturalHealth, fallbackHealth] = await Promise.all([providerHealth(natural), providerHealth(existing)]);
+      const entries = await Promise.all([...providers.values()].map(async (provider) => [provider.id, await providerHealth(provider)]));
       return send(response, 200, {
-        status: naturalHealth.available || fallbackHealth.available ? 'ok' : 'error',
+        status: entries.some(([, state]) => state.available) ? 'ok' : 'error',
         engine: 'provider-neutral-speech-router',
-        selected: naturalHealth.available ? natural.id : existing.id,
-        providers: { [natural.id]: naturalHealth, [existing.id]: fallbackHealth },
+        profiles: ROUTING_PROFILES,
+        providers: Object.fromEntries(entries),
       });
     }
     if (request.method === 'GET' && url.pathname === '/voices') {
-      return send(response, 200, { voices: [...naturalVoices, ...fallbackVoices] });
+      return send(response, 200, { voices: allVoices, identities, profiles: Object.keys(ROUTING_PROFILES) });
     }
-    if (request.method === 'POST' && url.pathname === '/synthesize') {
+    if (request.method === 'POST' && ['/synthesize', '/stream'].includes(url.pathname)) {
       const payload = await body(request);
-      const text = String(payload.text || '').trim();
-      const voice = String(payload.voice || '');
-      if (!text || text.length > 4000) throw new Error('Text must be 1-4000 characters');
-      if (![...naturalVoices, ...fallbackVoices].includes(voice)) throw new Error('Unknown voice');
-      let upstream;
-      let fallback = false;
-      if (natural.supports(voice)) {
-        try {
-          upstream = await natural.synthesize(payload);
-        } catch (error) {
-          console.error(`Natural TTS failed, using Flite fallback: ${error.message}`);
-          upstream = await existing.synthesize(payload);
-          fallback = true;
-        }
-      } else {
-        upstream = await existing.synthesize(payload);
-      }
-      const audio = Buffer.from(await upstream.arrayBuffer());
-      const forwarded = {
-        ...headers(upstream.headers.get('content-type') || 'audio/wav'),
-        'content-length': audio.length,
-        'x-tts-provider': upstream.headers.get('x-tts-provider') || (fallback ? existing.id : natural.id),
-        'x-tts-voice': voice,
-        'x-tts-latency-ms': upstream.headers.get('x-tts-latency-ms') || '0',
-        'x-tts-fallback': String(fallback),
-      };
-      for (const name of ['x-tts-model', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-vram-mib']) {
-        const value = upstream.headers.get(name);
-        if (value) forwarded[name] = value;
-      }
-      response.writeHead(200, forwarded);
-      return response.end(audio);
+      payload.text = String(payload.text || '').trim();
+      payload.voice = String(payload.voice || '');
+      if (!payload.text || payload.text.length > 4000) throw new Error('Text must be 1-4000 characters');
+      if (!allVoices.includes(payload.voice)) throw new Error('Unknown voice');
+      const result = await openFirstAudio(payload);
+      result.payloadVoice = payload.voice;
+      return url.pathname === '/stream' ? streamAudio(response, result) : completeAudio(response, result);
     }
     send(response, 404, { error: 'Not found' });
   } catch (error) {
     console.error(error);
-    send(response, 400, { error: error.message });
+    if (!response.headersSent) send(response, 503, { error: error.message });
+    else response.destroy(error);
   }
 });
 

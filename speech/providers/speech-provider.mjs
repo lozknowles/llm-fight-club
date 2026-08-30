@@ -1,12 +1,18 @@
 export class SpeechProvider {
-  constructor({ id, voices }) {
+  constructor({ id, voices, capabilities = [], voiceMap = {} }) {
     if (new.target === SpeechProvider) throw new Error('SpeechProvider is abstract');
     this.id = id;
     this.voices = voices;
+    this.capabilities = capabilities;
+    this.voiceMap = voiceMap;
   }
 
   supports(voice) {
     return this.voices.includes(voice);
+  }
+
+  resolveVoice(voice) {
+    return this.voiceMap[voice] || voice;
   }
 
   async health() {
@@ -16,14 +22,12 @@ export class SpeechProvider {
   async synthesize(_request) {
     throw new Error('synthesize() must be implemented');
   }
+
+  async synthesizeStream(request) {
+    return this.synthesize(request);
+  }
 }
 
 export async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
+  return fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(timeoutMs) });
 }

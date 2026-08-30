@@ -37,6 +37,10 @@ node scripts/qualify-natural-live-loop.mjs
 
 See `NATURAL-TTS-QUALIFICATION.md`, `QUALIFICATION-V2.md` and `ARCHITECTURE.md` for evidence and design details.
 
+## LIVE speech bake-off
+
+The isolated `feature/tts-latency-bakeoff` branch adds purpose profiles, OpenAI streaming PCM, an ElevenLabs streaming adapter, circuit-breaker fallback telemetry, browser Web Audio playback and causality-safe next-turn prefetch. The slow Qwen renderer remains the STUDIO path. See `TTS-LATENCY-BAKEOFF.md` for the measured result and blockers.
+
 ## Privacy and release
 
 Conversation transcripts are stored server-side under the configured data directory. An unlisted URL is not authentication; production operators should add authentication or rate limiting before treating the service as private. No homepage or navigation link is required.

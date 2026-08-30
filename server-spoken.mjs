@@ -13,6 +13,7 @@ try { routes = JSON.parse(process.env.FIGHT_CLUB_MODEL_ROUTES || '{}'); } catch 
 const models = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_URL || 'http://127.0.0.1:18780/v1', routes });
 const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:18772';
 const conversations = new Map();
+const prefetches = new Map();
 
 const send = (response, status, value, type = 'application/json; charset=utf-8') => {
   response.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
@@ -35,18 +36,24 @@ async function proxySpeech(request, response, pathname) {
     headers: payload ? { 'content-type': 'application/json' } : undefined,
     body: payload ? JSON.stringify(payload) : undefined,
   });
-  const bytes = Buffer.from(await upstream.arrayBuffer());
   const headers = {
     'content-type': upstream.headers.get('content-type') || 'application/octet-stream',
-    'content-length': String(bytes.length),
     'cache-control': 'no-store',
   };
-  for (const name of ['x-tts-provider', 'x-tts-model', 'x-tts-voice', 'x-tts-latency-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-vram-mib', 'x-tts-fallback']) {
+  for (const name of ['x-tts-provider', 'x-tts-model', 'x-tts-voice', 'x-tts-profile', 'x-tts-first-byte-ms', 'x-tts-latency-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-vram-mib', 'x-tts-fallback', 'x-tts-attempts', 'x-audio-format']) {
     const value = upstream.headers.get(name);
     if (value) headers[name] = value;
   }
+  if (!upstream.ok) {
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    headers['content-length'] = String(bytes.length);
+    response.writeHead(upstream.status, headers);
+    return response.end(bytes);
+  }
   response.writeHead(upstream.status, headers);
-  response.end(bytes);
+  if (!upstream.body) return response.end();
+  for await (const chunk of upstream.body) response.write(chunk);
+  response.end();
 }
 async function persist(conversation) {
   await fs.mkdir(path.join(dataDir, 'conversations'), { recursive: true });
@@ -93,11 +100,43 @@ function prompt(conversation, participant, analysis) {
   };
 }
 
-async function generate(conversation) {
-  const participant = beginTurn(conversation);
-  const analysis = await analyse(conversation, participant);
-  const request = prompt(conversation, participant, analysis);
+async function prepareTurn(conversation) {
+  const working = structuredClone(conversation);
+  if (working.awaitingPlayback) {
+    working.awaitingPlayback = false;
+    working.current = null;
+    working.state = 'ACTIVE';
+  }
+  const participant = beginTurn(working);
+  const analysis = await analyse(working, participant);
+  const request = prompt(working, participant, analysis);
+  const started = performance.now();
   const result = await models.generate({ model: participant.model, ...request });
+  return {
+    transcriptLength: conversation.transcript.length,
+    participantId: participant.id,
+    analysisEntry: analysis ? working.directorMemory.at(-1) : null,
+    result,
+    prepareLatencyMs: Math.round(performance.now() - started),
+  };
+}
+
+async function generate(conversation) {
+  const pending = prefetches.get(conversation.id);
+  let prepared;
+  if (pending?.transcriptLength === conversation.transcript.length) {
+    prepared = await pending.promise;
+    prefetches.delete(conversation.id);
+  } else {
+    prepared = await prepareTurn(conversation);
+  }
+  const participant = beginTurn(conversation);
+  if (participant.id !== prepared.participantId) throw new Error('Prefetched participant no longer matches turn policy');
+  if (prepared.analysisEntry) {
+    conversation.directorMemory.push(prepared.analysisEntry);
+    conversation.directorMemory = conversation.directorMemory.slice(-8);
+  }
+  const result = prepared.result;
   const row = recordTurn(conversation, {
     text: result.text,
     provider: result.provider,
@@ -113,7 +152,15 @@ async function generate(conversation) {
     tts_generation_latency_ms: 0,
     audio_duration_ms: null,
   });
-  conversation.telemetry.push({ turn_id: row.turn_id, participant_id: participant.id, model: participant.model, model_latency_ms: result.latencyMs, director_analysis: Boolean(analysis) });
+  conversation.telemetry.push({
+    turn_id: row.turn_id,
+    participant_id: participant.id,
+    model: participant.model,
+    model_latency_ms: result.latencyMs,
+    director_analysis: Boolean(prepared.analysisEntry),
+    prefetched_during_previous_playback: Boolean(pending),
+    prefetch_prepare_latency_ms: prepared.prepareLatencyMs,
+  });
   await persist(conversation);
   return row;
 }
@@ -124,7 +171,7 @@ const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
     if (request.method === 'GET' && url.pathname === '/tts/voices') return await proxySpeech(request, response, url.pathname);
-    if (request.method === 'POST' && url.pathname === '/tts/synthesize') return await proxySpeech(request, response, url.pathname);
+    if (request.method === 'POST' && ['/tts/synthesize', '/tts/stream'].includes(url.pathname)) return await proxySpeech(request, response, url.pathname);
     if (request.method === 'GET' && url.pathname === '/api/config') return send(response, 200, { formats: FORMATS, personalities: PERSONALITIES, models: Object.keys(routes).length ? Object.keys(routes) : ['qwen3-8b'] });
     if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok', engine: 'conversation-v2', speech: 'provider-neutral-router' });
     if (request.method === 'POST' && url.pathname === '/api/conversations') {
@@ -139,7 +186,7 @@ const server = http.createServer(async (request, response) => {
       if (!conversation) return send(response, 404, { error: 'Conversation not found' });
       return exportMatch[2] === 'json' ? send(response, 200, conversation) : send(response, 200, markdown(conversation), 'text/markdown; charset=utf-8');
     }
-    const match = url.pathname.match(/^\/api\/conversations\/([\w-]+)(?:\/(next|complete-playback|pause|resume|stop))?$/);
+    const match = url.pathname.match(/^\/api\/conversations\/([\w-]+)(?:\/(next|prefetch|complete-playback|pause|resume|stop))?$/);
     if (match) {
       const conversation = conversations.get(match[1]);
       if (!conversation) return send(response, 404, { error: 'Conversation not found' });
@@ -147,10 +194,21 @@ const server = http.createServer(async (request, response) => {
       const action = match[2];
       const payload = await body(request);
       if (action === 'next') return send(response, 200, { turn: await generate(conversation), conversation });
+      if (action === 'prefetch') {
+        if (!conversation.awaitingPlayback) throw new Error('Prefetch requires a turn currently in playback');
+        if (conversation.transcript.length >= conversation.turnLimit) return send(response, 200, { status: 'not-needed' });
+        const existing = prefetches.get(conversation.id);
+        if (!existing || existing.transcriptLength !== conversation.transcript.length) {
+          const promise = prepareTurn(conversation);
+          promise.catch(() => {});
+          prefetches.set(conversation.id, { transcriptLength: conversation.transcript.length, promise });
+        }
+        return send(response, 202, { status: 'preparing', transcriptLength: conversation.transcript.length });
+      }
       if (action === 'complete-playback') { completePlayback(conversation, payload); await persist(conversation); return send(response, 200, conversation); }
       if (action === 'pause') { pause(conversation); await persist(conversation); return send(response, 200, conversation); }
       if (action === 'resume') { resume(conversation); await persist(conversation); return send(response, 200, conversation); }
-      if (action === 'stop') { stop(conversation); await persist(conversation); return send(response, 200, conversation); }
+      if (action === 'stop') { prefetches.delete(conversation.id); stop(conversation); await persist(conversation); return send(response, 200, conversation); }
     }
     if (request.method === 'GET') {
       const file = url.pathname === '/' ? 'show.html' : path.basename(url.pathname);

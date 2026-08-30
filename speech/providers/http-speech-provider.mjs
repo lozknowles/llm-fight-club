@@ -1,8 +1,8 @@
 import { SpeechProvider, fetchWithTimeout } from './speech-provider.mjs';
 
 export class HttpSpeechProvider extends SpeechProvider {
-  constructor({ id, voices, baseUrl, fallbackVoices = {} }) {
-    super({ id, voices });
+  constructor({ id, voices, baseUrl, fallbackVoices = {}, capabilities = [] }) {
+    super({ id, voices, capabilities, voiceMap: fallbackVoices });
     this.baseUrl = baseUrl;
     this.fallbackVoices = fallbackVoices;
   }
@@ -14,7 +14,7 @@ export class HttpSpeechProvider extends SpeechProvider {
   }
 
   async synthesize(request) {
-    const voice = this.fallbackVoices[request.voice] || request.voice;
+    const voice = this.resolveVoice(request.voice);
     const response = await fetchWithTimeout(`${this.baseUrl}/synthesize`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

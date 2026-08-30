@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — LIVE TTS bake-off
+
+- Added `LIVE_FAST`, `LIVE_QUALITY`, `STUDIO` and `OFFLINE` speech purpose profiles.
+- Added backend-only OpenAI `gpt-4o-mini-tts` streaming PCM with distinct cedar, marin and coral identities.
+- Added a fail-closed ElevenLabs Flash v2.5 streaming provider ready for configured voice IDs.
+- Added chunk-preserving same-origin proxying and browser Web Audio PCM scheduling.
+- Added first-byte, first-decodable, first-playable, stream-complete, fallback-attempt and inter-speaker-silence telemetry.
+- Added bounded provider circuit breaking with explicit fallback evidence.
+- Added causality-safe LLM turn prefetch during the preceding participant's playback.
+- Added identical-script provider benchmark audio and browser acceptance evidence.
+- Retained Qwen as STUDIO and Flite as offline/final fallback.
+- Did not deploy publicly or modify Agent Control.
+
 ## 0.2.0 — 2026-08-30
 
 - Generalised the debate prototype into a spoken multi-agent conversation engine.
