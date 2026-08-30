@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-30 - Browser preview PCM compatibility
+
+- Wrap raw 24 kHz mono PCM responses in a WAV container before voice-preview playback.
+- Preserve the existing low-latency Web Audio streaming path for live conversation turns.
+- Add a regression test for the generated WAV header and PCM payload.
+
 ## Unreleased — LIVE TTS bake-off
 
 - Added passionate, balanced and restrained delivery controls without changing participant voice identity.

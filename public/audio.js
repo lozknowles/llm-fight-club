@@ -1,3 +1,5 @@
+import { pcmS16leToWav } from './audio-format.js';
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const appBase = new URL('.', window.location.href).pathname;
@@ -64,6 +66,14 @@ function pcmFloats(bytes, carry) {
   const samples = new Float32Array(usable / 2);
   for (let index = 0; index < samples.length; index += 1) samples[index] = view.getInt16(index * 2, true) / 32768;
   return { samples, carry: merged.slice(usable) };
+}
+
+async function previewAudioBlob(response) {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (response.headers.get('x-audio-format') === 'pcm_s16le_24000_mono') {
+    return new Blob([pcmS16leToWav(bytes)], { type: 'audio/wav' });
+  }
+  return new Blob([bytes], { type: response.headers.get('content-type') || 'audio/wav' });
 }
 
 async function streamPcm(response, began) {
@@ -348,8 +358,10 @@ $$('.preview').forEach((button) => {
         }),
       });
       if (!response.ok) throw new Error(`TTS ${response.status}: ${await response.text()}`);
-      audioUrl = URL.createObjectURL(await response.blob());
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      audioUrl = URL.createObjectURL(await previewAudioBlob(response));
       player.src = audioUrl;
+      player.onerror = () => { $('#error').textContent = 'Audio preview playback failed'; };
       await player.play();
     } catch (error) {
       $('#error').textContent = error.message;
