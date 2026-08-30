@@ -52,6 +52,8 @@ See `NATURAL-TTS-QUALIFICATION.md`, `QUALIFICATION-V2.md` and `ARCHITECTURE.md` 
 
 The isolated `feature/tts-latency-bakeoff` branch adds purpose profiles, OpenAI streaming PCM, an ElevenLabs streaming adapter, circuit-breaker fallback telemetry, browser Web Audio playback and causality-safe next-turn prefetch. The slow Qwen renderer remains the STUDIO path. See `TTS-LATENCY-BAKEOFF.md` for the measured result and blockers.
 
+The hidden deployment also exposes three explicitly labelled ElevenLabs v3 choices: Daniel (British broadcaster) for interviewer, Lily (British character voice) for guest, and George (British storyteller) for host/referee. Their provider voice IDs and API credential live only in `.env.local`; selecting one of these identities routes to ElevenLabs while retaining the local speech fallback chain. Personality delivery hints are translated into non-spoken v3 performance directions without changing transcript text.
+
 ## Privacy and release
 
 Conversation transcripts and generated audio are stored server-side under the configured data directory. An unlisted URL is not authentication; production operators should add authentication, retention controls or rate limiting before treating the service as private. No homepage or navigation link is required.

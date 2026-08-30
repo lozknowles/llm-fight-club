@@ -218,7 +218,9 @@ function fill() {
   $$('.personality')[1].value = 'cedric-pump';
   $$('.personality')[2].value = 'nina-quark';
   if (config.models[1]) $$('.model')[1].value = config.models[1];
-  const defaults = ['live-interviewer', 'live-guest', 'live-host'];
+  const premiumDefaults = ['eleven-interviewer', 'eleven-guest', 'eleven-host'];
+  const liveDefaults = ['live-interviewer', 'live-guest', 'live-host'];
+  const defaults = premiumDefaults.every((id) => voices.includes(id)) ? premiumDefaults : liveDefaults;
   $$('.voice').forEach((select, index) => { select.value = defaults[index] || voices[index]; });
 }
 

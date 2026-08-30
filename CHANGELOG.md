@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-30 — ElevenLabs v3 premium voices
+
+- Added three clearly labelled British ElevenLabs v3 voice identities for interviewer, guest and host/referee.
+- Added expressive v3 performance direction derived from delivery hints while preserving canonical transcript text.
+- Kept API credentials and provider voice IDs in protected runtime configuration, with local TTS fallbacks retained.
+
 ## 2026-08-30 - Classic local TTS comparison voices
 
 - Add isolated eSpeak NG 1.51 and Festival 2.5 speech providers without changing the qualified default voices.

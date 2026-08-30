@@ -10,13 +10,17 @@ const host = process.env.SPEECH_ROUTER_HOST || '127.0.0.1';
 const port = Number(process.env.SPEECH_ROUTER_PORT || 18772);
 const allowedOrigin = process.env.SPEECH_ALLOWED_ORIGIN || 'http://127.0.0.1:18770';
 const identities = ['live-interviewer', 'live-guest', 'live-host'];
+const elevenVoices = ['eleven-interviewer', 'eleven-guest', 'eleven-host'];
 const naturalVoices = ['natural-interviewer', 'natural-guest', 'natural-referee'];
 const fallbackVoices = ['awb', 'kal', 'kal16', 'rms', 'slt'];
-const allVoices = [...identities, ...naturalVoices, ...CLASSIC_VOICE_IDS, ...fallbackVoices];
+const allVoices = [...identities, ...elevenVoices, ...naturalVoices, ...CLASSIC_VOICE_IDS, ...fallbackVoices];
 const voiceLabels = {
   'live-interviewer': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Cedar interviewer',
   'live-guest': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Marin guest',
   'live-host': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Coral host/referee',
+  'eleven-interviewer': 'PREMIUM: ElevenLabs v3 — Daniel, British broadcaster',
+  'eleven-guest': 'PREMIUM: ElevenLabs v3 — Lily, British character voice',
+  'eleven-host': 'PREMIUM: ElevenLabs v3 — George, British host/referee',
   'natural-interviewer': 'STUDIO: Qwen3-TTS 1.7B local — interviewer',
   'natural-guest': 'STUDIO: Qwen3-TTS 1.7B local — guest',
   'natural-referee': 'STUDIO: Qwen3-TTS 1.7B local — referee',
@@ -33,6 +37,7 @@ function optionalJson(name) {
 const openai = new OpenAISpeechProvider({ apiKey: process.env.OPENAI_API_KEY });
 const elevenlabs = new ElevenLabsSpeechProvider({
   apiKey: process.env.ELEVENLABS_API_KEY,
+  model: process.env.ELEVENLABS_TTS_MODEL || 'eleven_v3',
   voiceMap: optionalJson('ELEVENLABS_VOICE_MAP'),
 });
 const natural = new HttpSpeechProvider({
@@ -44,6 +49,9 @@ const natural = new HttpSpeechProvider({
     'live-interviewer': 'natural-interviewer',
     'live-guest': 'natural-guest',
     'live-host': 'natural-referee',
+    'eleven-interviewer': 'natural-interviewer',
+    'eleven-guest': 'natural-guest',
+    'eleven-host': 'natural-referee',
   },
 });
 const existing = new HttpSpeechProvider({
@@ -55,6 +63,9 @@ const existing = new HttpSpeechProvider({
     'live-interviewer': 'awb',
     'live-guest': 'slt',
     'live-host': 'rms',
+    'eleven-interviewer': 'awb',
+    'eleven-guest': 'slt',
+    'eleven-host': 'rms',
     'natural-interviewer': 'awb',
     'natural-guest': 'slt',
     'natural-referee': 'rms',
@@ -72,9 +83,9 @@ const unavailableUntil = new Map();
 const firstByteTimeoutMs = Number(process.env.SPEECH_FIRST_BYTE_TIMEOUT_MS || 30000);
 const streamIdleTimeoutMs = Number(process.env.SPEECH_STREAM_IDLE_TIMEOUT_MS || 30000);
 export const ROUTING_PROFILES = {
-  LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'classic-local-tts', 'ffmpeg-flite'],
-  LIVE_QUALITY: ['openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
-  STUDIO: ['qwen3-tts-voicedesign', 'openai-gpt-4o-mini-tts', 'elevenlabs-flash-v2.5', 'classic-local-tts', 'ffmpeg-flite'],
+  LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-v3', 'classic-local-tts', 'ffmpeg-flite'],
+  LIVE_QUALITY: ['elevenlabs-v3', 'openai-gpt-4o-mini-tts', 'qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
+  STUDIO: ['qwen3-tts-voicedesign', 'elevenlabs-v3', 'openai-gpt-4o-mini-tts', 'classic-local-tts', 'ffmpeg-flite'],
   OFFLINE: ['qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
 };
 

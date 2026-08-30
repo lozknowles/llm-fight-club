@@ -53,6 +53,34 @@ test('ElevenLabs provider is fail-closed until key and voice ids are configured'
   );
 });
 
+test('ElevenLabs v3 keeps participant identity separate and adds performance direction', async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return new Response(new Uint8Array([0xff, 0xfb, 0x90, 0x64]), { status: 200, headers: { 'content-type': 'audio/mpeg' } });
+  };
+  try {
+    const provider = new ElevenLabsSpeechProvider({
+      apiKey: 'test-only',
+      voiceMap: { 'eleven-interviewer': 'voice-daniel' },
+    });
+    const response = await provider.synthesizeStream({
+      text: 'So that is your entire strategy?',
+      voice: 'eleven-interviewer',
+      delivery: 'PASSIONATE',
+      deliveryHints: ['dry'],
+    });
+    assert.equal(response.ok, true);
+    assert.match(request.url, /voice-daniel\/stream/);
+    assert.equal(request.body.model_id, 'eleven_v3');
+    assert.equal(request.body.text, '[excited] So that is your entire strategy?');
+    assert.equal(request.body.voice_settings.stability, 0.45);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('fallback voice mapping remains separate from voice identity', () => {
   const provider = new HttpSpeechProvider({
     id: 'existing', voices: ['awb'], baseUrl: 'http://127.0.0.1:1',

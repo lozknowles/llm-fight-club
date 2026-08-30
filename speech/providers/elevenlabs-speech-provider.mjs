@@ -1,15 +1,31 @@
 import { SpeechProvider, fetchWithTimeout } from './speech-provider.mjs';
 
+const DELIVERY_TAGS = new Map([
+  ['deadpan', '[deadpan]'], ['dry', '[deadpan]'],
+  ['irritated', '[irritated]'],
+  ['nervous', '[hesitant]'], ['hesitant', '[hesitant]'],
+  ['enthusiastic', '[excited]'], ['passionate', '[excited]'],
+  ['authoritative', '[confident]'], ['measured', '[confident]'],
+]);
+
+function directedText(request) {
+  const hints = [request.delivery, ...(request.deliveryHints || [])]
+    .filter(Boolean)
+    .map((hint) => String(hint).toLowerCase());
+  const tag = hints.map((hint) => DELIVERY_TAGS.get(hint)).find(Boolean);
+  return tag ? `${tag} ${request.text}` : request.text;
+}
+
 export class ElevenLabsSpeechProvider extends SpeechProvider {
   constructor({
     apiKey,
-    model = 'eleven_flash_v2_5',
+    model = 'eleven_v3',
     baseUrl = 'https://api.elevenlabs.io/v1',
     voiceMap = {},
   } = {}) {
     const voices = Object.keys(voiceMap);
     super({
-      id: 'elevenlabs-flash-v2.5',
+      id: 'elevenlabs-v3',
       voices,
       voiceMap,
       capabilities: ['speech.live', 'speech.streaming'],
@@ -38,9 +54,14 @@ export class ElevenLabsSpeechProvider extends SpeechProvider {
         method: 'POST',
         headers: { 'xi-api-key': this.apiKey, 'content-type': 'application/json' },
         body: JSON.stringify({
-          text: request.text,
+          text: directedText(request),
           model_id: this.model,
-          voice_settings: { stability: 0.42, similarity_boost: 0.72, style: 0.18, use_speaker_boost: true },
+          voice_settings: {
+            stability: 0.45,
+            similarity_boost: 0.75,
+            style: 0,
+            use_speaker_boost: true,
+          },
         }),
       },
       Number(process.env.ELEVENLABS_TTS_TIMEOUT_MS || 45000),

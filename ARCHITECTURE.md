@@ -81,6 +81,8 @@ turn text -> speech profile -> provider-neutral router
  FFmpeg + 350 ms gaps -> conversation.mp3
 ```
 
+The ElevenLabs implementation is `ElevenLabsSpeechProvider`, configured as `eleven_v3` for the premium labelled voices. Stable participant-facing identities (`eleven-interviewer`, `eleven-guest`, `eleven-host`) remain separate from provider voice IDs in `ELEVENLABS_VOICE_MAP`. Delivery hints may add v3 audio-direction tags to synthesis input only; the canonical transcript remains unchanged. Credentials and voice assignments are runtime configuration and are never served to the browser.
+
 While turn A is audible, the server may prepare turn B on a cloned conversation snapshot containing A's final text. The prepared result is committed only after A's playback acknowledgement and only if the selected participant and transcript length still match. This preserves causal ordering while removing most next-turn LLM latency from the audible gap.
 
 The application router is a qualified prototype, not a replacement for Agent Control. Its profile/capability vocabulary maps directly to Agent Control provider resources and a future verified `speech.synthesize@1` job action.
