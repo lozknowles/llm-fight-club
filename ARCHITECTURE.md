@@ -55,6 +55,8 @@ The LozKnowles.com deployment remains unlinked and emits `X-Robots-Tag: noindex,
 
 Agent Control is not imported or modified. Its protected services remain operationally separate.
 
+The public application, speech router and Flite fallback have separate user-level service units rooted in the isolated release worktree. The public fallback listens only on loopback port 18874; the existing shared Flite and Qwen services are not rewritten or restarted by this deployment.
+
 ## LIVE streaming extension
 
 The bake-off branch adds a streaming transport without changing ConversationEngine:

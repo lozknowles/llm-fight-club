@@ -1,0 +1,20 @@
+[Unit]
+Description=Spoken AI Studio public isolated Flite fallback provider
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-tts-bakeoff-20260830
+Environment=FLITE_HOST=127.0.0.1
+Environment=FLITE_PORT=18874
+Environment=FLITE_ALLOWED_ORIGIN=https://lozknowles.com
+Environment=TMPDIR=/tmp
+ExecStart=/usr/bin/node flite-service.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

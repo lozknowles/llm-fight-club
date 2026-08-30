@@ -8,6 +8,7 @@
 - Apply pitch-preserving FFmpeg tempo adjustment when Flite is used as the final fallback.
 - Add a completed-conversation player with adjustable 0.75×–2× playback speed while keeping the downloadable MP3 canonical.
 - Add regression coverage for speed bounds and OpenAI pace direction.
+- Add a speed-aware public Flite fallback service isolated from the authoritative shared TTS checkout.
 
 ## 2026-08-30 - Conversation audio archive
 
