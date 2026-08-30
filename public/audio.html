@@ -14,7 +14,14 @@
   button{width:auto;background:#b5384f;border:0;font-weight:700;cursor:pointer;margin:4px}
   button:disabled{background:#514a53;color:#aaa1ac;cursor:not-allowed;opacity:.72}
   .primary{font-size:1.08rem;padding:12px 22px}
-  .controls{display:none;position:sticky;top:8px;z-index:2}
+  .heat-panel{position:sticky;top:8px;z-index:5;border-color:#8f4f50;background:#261d23;box-shadow:0 8px 24px #080609cc}
+  .heat-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .heat-heading h2{margin:0;font-size:1.05rem}
+  .heat-value{font-weight:800;color:#ffb36b}
+  .heat-scale{display:flex;justify-content:space-between;font-size:.7rem;color:#bbaabd;text-transform:uppercase}
+  #conversationHeat{accent-color:#e14c4c;padding:0;border:0;background:linear-gradient(90deg,#7ab8ff,#d9b85b,#ef4444);height:8px}
+  .controls{display:none;position:static}
+  .transcript-window{height:min(58vh,650px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;background:#17131a;border:1px solid #46384c;border-radius:14px;padding:10px;margin:14px 0}
   .turn{border-left:6px solid var(--accent);padding:14px;margin:12px 0;background:#211c25;border-radius:8px}
   .speaking{box-shadow:0 0 0 3px #ffd166}
   .meta{font-size:.78rem;color:#bbaabd}
@@ -26,21 +33,27 @@
   .grenade h3{margin:0 0 5px}
   .intervention{border-left:6px solid #ff9f1c;padding:10px 12px;margin:8px 0;background:#30251d;border-radius:8px}
   #third{display:none}
-  @media(max-width:600px){body{padding:10px}.controls button{width:46%}}
+  @media(max-width:600px){body{padding:10px}.controls button{width:46%}.transcript-window{height:52vh}.heat-scale span:nth-child(even){display:none}}
 </style>
 <body>
   <h1>Spoken AI Studio</h1>
   <p>AI-generated synthetic voices · turn-based audio · unscripted personalities</p>
+  <section id="heatPanel" class="card heat-panel">
+    <div class="heat-heading"><h2>CONVERSATION HEAT</h2><span id="heatValue" class="heat-value">BALANCED</span></div>
+    <label for="conversationHeat"><span id="heatDescription">Natural challenge, humour and occasional interruption.</span></label>
+    <input id="conversationHeat" type="range" min="1" max="5" step="1" value="3" aria-label="Conversation heat from docile to furious">
+    <div class="heat-scale" aria-hidden="true"><span>Docile</span><span>Calm</span><span>Balanced</span><span>Heated</span><span>Furious</span></div>
+    <p class="meta">Change this live. Hotter settings increase direct counterarguments, expressive emphasis and contextual barge-in; human grenades still take priority.</p>
+  </section>
   <form id="setup" class="card">
     <div class="grid">
       <label>FORMAT<select id="format"><option>INTERVIEW</option><option>DEBATE</option><option>PANEL</option><option>CROSS_EXAMINATION</option></select></label>
       <label>STYLE<select id="style"><option>SATIRICAL</option><option>SERIOUS</option><option>FRIENDLY</option><option>INVESTIGATIVE</option><option>ABSURDIST</option></select></label>
       <label>DELIVERY<select id="delivery"><option selected>PASSIONATE</option><option>BALANCED</option><option>RESTRAINED</option></select></label>
-      <label>MODEL INTERRUPTION LEVEL<select id="interruptionLevel"><option>OFF</option><option>POLITE</option><option selected>NATURAL</option><option>ARGUMENTATIVE</option><option>CHAOS</option></select></label>
       <label>INTERRUPTION AUDIO<select id="interruptionAudio"><option value="NATURAL_DUCK" selected>Natural duck (brief fade)</option><option value="HARD_CUT">Hard cut</option></select></label>
       <label id="refereeOption" hidden>DEBATE REFEREE<select id="refereeEnabled"><option value="false" selected>Off</option><option value="true">On — may interrupt</option></select></label>
     </div>
-    <p class="meta">Autonomous listeners inspect only words already audible. “Natural” uses three sparse checkpoints per turn; human grenades always take priority.</p>
+    <p class="meta">Autonomous listeners inspect only words already audible. Conversation Heat controls their interruption threshold; human grenades always take priority.</p>
     <label>TOPIC / PREMISE<textarea id="premise" rows="3">Why does your Institute for Forward Pavements believe every town needs a Department of Strategic Queuing?</textarea></label>
     <label>LENGTH (TURNS, 2–40)<input id="turnLimit" type="number" min="2" max="40" step="1" value="4"></label>
     <div class="grid">
@@ -106,7 +119,7 @@
       <audio id="archivePlayer" controls preload="metadata"></audio>
     </div>
   </section>
-  <main id="transcript" aria-live="polite"></main>
+  <main id="transcript" class="transcript-window" aria-live="polite" hidden></main>
   <audio id="player" preload="auto"></audio>
   <script src="polyfills.js"></script>
   <script type="module" src="audio.js"></script>

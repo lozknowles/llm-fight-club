@@ -38,6 +38,28 @@ const speechGain = audioContext ? audioContext.createGain() : null;
 if (speechGain) speechGain.connect(audioContext.destination);
 const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
 let grenadeRecognition = null;
+const heatLevels = ['DOCILE', 'CALM', 'BALANCED', 'HEATED', 'FURIOUS'];
+const heatDescriptions = {
+  DOCILE: 'Patient, conciliatory and willing to give ground.',
+  CALM: 'Polite disagreement with measured delivery.',
+  BALANCED: 'Natural challenge, humour and occasional interruption.',
+  HEATED: 'Forceful counterarguments, impatience and sharper interruptions.',
+  FURIOUS: 'Combative, emphatic and ready to cut in on a real point of conflict.',
+};
+
+function selectedHeat() {
+  return heatLevels[Math.max(0, Math.min(4, Number($('#conversationHeat').value) - 1))];
+}
+
+function renderHeat(heat = selectedHeat()) {
+  const normalized = heatLevels.includes(heat) ? heat : 'BALANCED';
+  $('#conversationHeat').value = String(heatLevels.indexOf(normalized) + 1);
+  $('#heatValue').textContent = normalized;
+  $('#heatDescription').textContent = config?.conversationHeat?.[normalized]?.description || heatDescriptions[normalized];
+  const ended = conversation && ['STOPPED', 'COMPLETED', 'ERROR'].includes(conversation.state);
+  $('#conversationHeat').disabled = Boolean(ended);
+  $('#heatPanel').dataset.heat = normalized;
+}
 
 async function api(path, method = 'GET', payload) {
   const response = await fetch(endpoint(path), {
@@ -168,7 +190,12 @@ async function evaluateCheckpoint(turn, fraction, checkpoint, generation) {
 function startBargeMonitor(turn) {
   clearBargeMonitor();
   if (!turn || conversation.interruptionLevel === 'OFF' || turn.autonomous_interruption || turn.interruption_reaction) return;
-  const checkpoints = [.32, .56, .79];
+  const checkpoints = {
+    CALM: [.58, .82],
+    BALANCED: [.32, .56, .79],
+    HEATED: [.24, .43, .63, .82],
+    FURIOUS: [.18, .32, .47, .62, .78],
+  }[conversation.conversationHeat] || [.32, .56, .79];
   const generation = bargeGeneration;
   bargeCheckpointIndex = 0;
   bargeMonitor = setInterval(() => {
@@ -177,7 +204,7 @@ function startBargeMonitor(turn) {
     const target = checkpoints[bargeCheckpointIndex];
     if (fraction < target) return;
     bargeCheckpointIndex += 1;
-    evaluateCheckpoint(turn, fraction, `P${bargeCheckpointIndex}`, generation);
+    evaluateCheckpoint(turn, fraction, `H${conversation.heatRevision || 0}-P${bargeCheckpointIndex}`, generation);
   }, 150);
 }
 
@@ -349,7 +376,7 @@ function fill() {
   if (config.models[1]) $$('.model')[1].value = config.models[1];
   const premiumDefaults = ['eleven-interviewer', 'eleven-guest', 'eleven-host'];
   const liveDefaults = ['live-interviewer', 'live-guest', 'live-host'];
-  const defaults = premiumDefaults.every((id) => voices.includes(id)) ? premiumDefaults : liveDefaults;
+  const defaults = liveDefaults.every((id) => voices.includes(id)) ? liveDefaults : premiumDefaults;
   $$('.voice').forEach((select, index) => { select.value = defaults[index] || voices[index]; });
   $$('.personality').forEach((select) => {
     const updateSummary = () => {
@@ -377,7 +404,8 @@ function participant(card) {
 
 function render() {
   if (!conversation) return;
-  $('#status').textContent = `${conversation.format} · ${conversation.state} · ${conversation.transcript.length}/${conversation.turnLimit} · ${speechProfile}`;
+  renderHeat(conversation.conversationHeat);
+  $('#status').textContent = `${conversation.format} · ${conversation.state} · ${conversation.transcript.length}/${conversation.turnLimit} · ${conversation.conversationHeat} · ${speechProfile}`;
   const controls = controlAvailability(conversation);
   $('#pause').disabled = !controls.pause;
   $('#resume').disabled = !controls.resume;
@@ -400,6 +428,9 @@ function render() {
       <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${interruption}${live}${audio}</span>
     </article>`;
   }).join('');
+  const transcriptWindow = $('#transcript');
+  transcriptWindow.hidden = false;
+  requestAnimationFrame(() => { transcriptWindow.scrollTop = transcriptWindow.scrollHeight; });
   const latestDecision = (conversation.interruptionTelemetry || []).at(-1);
   if (latestDecision && !conversation.awaitingPlayback) $('#bargeInStatus').textContent = `${latestDecision.action}: ${latestDecision.participantName || 'listeners'} — ${latestDecision.reason}`;
   $('#grenadeHistory').innerHTML = (conversation.audienceInterventions || []).slice().reverse().map((item) => {
@@ -506,12 +537,13 @@ $('#setup').onsubmit = async (event) => {
       turnLength: 55,
       speechMode: 'server-streaming',
       speechProfile,
-      interruptionLevel: $('#interruptionLevel').value,
+      conversationHeat: selectedHeat(),
       interruptionAudio: $('#interruptionAudio').value,
       participants,
     });
     $('#setup').style.display = 'none';
     $('#controls').style.display = 'block';
+    $('#transcript').hidden = false;
     $('#jsonExport').href = endpoint(`/api/conversations/${conversation.id}/export.json`);
     $('#mdExport').href = endpoint(`/api/conversations/${conversation.id}/export.md`);
     $('#audioExport').href = endpoint(`/api/conversations/${conversation.id}/conversation.mp3`);
@@ -524,6 +556,21 @@ $('#setup').onsubmit = async (event) => {
 
 $('#format').onchange = configure;
 $('#refereeEnabled').onchange = configure;
+$('#conversationHeat').oninput = () => renderHeat(selectedHeat());
+$('#conversationHeat').onchange = async () => {
+  const heat = selectedHeat();
+  renderHeat(heat);
+  if (!conversation) return;
+  try {
+    conversation = await api(`/api/conversations/${conversation.id}/heat`, 'POST', { heat });
+    $('#bargeInStatus').textContent = `Conversation heat changed to ${conversation.conversationHeat}.`;
+    render();
+    if (conversation.awaitingPlayback && currentTurn) startBargeMonitor(currentTurn);
+  } catch (error) {
+    $('#error').textContent = error.message;
+    renderHeat(conversation.conversationHeat);
+  }
+};
 $('#archivePlaybackRate').onchange = () => {
   archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
   archivePlayer.preservesPitch = true;
@@ -624,6 +671,7 @@ $$('.preview').forEach((button) => {
 });
 
 config = await api('/api/config');
+renderHeat();
 const voiceResponse = await fetch(`${ttsBase}/voices`).then((response) => response.json());
 voices = voiceResponse.voices;
 voiceOptions = voiceResponse.voiceOptions || voices.map((id) => ({ id, label: id }));

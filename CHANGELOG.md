@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-30 — Live Conversation Heat
+
+- Added a sticky live `Docile` → `Furious` Conversation Heat control above the programme.
+- Heat now changes counterargument strength, patience, expressive delivery hints, interruption thresholds and audible-prefix checkpoint frequency.
+- Heated/Furious prompts favour explicit reasoned disagreement, contextual exasperation and selective vocal emphasis while preventing empty shouting, abuse and repetitive canned phrases.
+- Added a private debate-position guard and stance retry so raising heat cannot make a speaker reverse its assigned side.
+- ElevenLabs v3 receives heat-priority performance tags; other providers retain provider-neutral delivery hints.
+- Restored the currently healthy OpenAI live performers as defaults while leaving ElevenLabs clearly selectable; the configured ElevenLabs key is presently quota-limited and otherwise falls back to Flite.
+- Heat changes are revisioned, persisted, exported and recorded in telemetry, and invalidate stale prefetched dialogue.
+- Moved the transcript beneath the control area into a fixed-height, automatically advancing scroll window.
+- Added focused engine, UI-source and ElevenLabs routing tests.
+- Added a real two-turn Furious qualification covering opposing positions, expressive OpenAI audio, live heat revision and provider telemetry.
+
 ## 2026-08-30 — State-aware transport controls
 
 - Transport buttons now expose only actions valid for the current conversation state.

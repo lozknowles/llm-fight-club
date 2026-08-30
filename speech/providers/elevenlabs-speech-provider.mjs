@@ -2,18 +2,29 @@ import { SpeechProvider, fetchWithTimeout } from './speech-provider.mjs';
 
 const DELIVERY_TAGS = new Map([
   ['deadpan', '[deadpan]'], ['dry', '[deadpan]'],
-  ['irritated', '[irritated]'],
+  ['furious', '[angry]'], ['angry', '[angry]'],
+  ['heated', '[irritated]'], ['irritated', '[irritated]'],
+  ['exasperated', '[sighs]'],
   ['nervous', '[hesitant]'], ['hesitant', '[hesitant]'],
   ['enthusiastic', '[excited]'], ['passionate', '[excited]'],
   ['authoritative', '[confident]'], ['measured', '[confident]'],
 ]);
 
 function directedText(request) {
-  const hints = [request.delivery, ...(request.deliveryHints || [])]
+  const deliveryHints = (request.deliveryHints || [])
     .filter(Boolean)
     .map((hint) => String(hint).toLowerCase());
-  const tag = hints.map((hint) => DELIVERY_TAGS.get(hint)).find(Boolean);
-  return tag ? `${tag} ${request.text}` : request.text;
+  const heatTag = deliveryHints
+    .filter((hint) => ['furious', 'angry', 'heated', 'irritated', 'exasperated'].includes(hint))
+    .map((hint) => DELIVERY_TAGS.get(hint))
+    .find(Boolean);
+  const ordinaryHints = [request.delivery, ...deliveryHints]
+    .filter(Boolean)
+    .map((hint) => String(hint).toLowerCase());
+  const tag = heatTag || ordinaryHints.map((hint) => DELIVERY_TAGS.get(hint)).find(Boolean);
+  const naturallyExasperated = /^(?:oh[,!]?\s+)?(?:are you kidding me|for goodness[’'] sake|come on)\b/i.test(String(request.text || '').trim());
+  const prefix = heatTag && naturallyExasperated ? `[sighs] ${heatTag}` : tag;
+  return prefix ? `${prefix} ${request.text}` : request.text;
 }
 
 export class ElevenLabsSpeechProvider extends SpeechProvider {

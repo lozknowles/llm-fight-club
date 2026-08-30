@@ -81,6 +81,44 @@ test('ElevenLabs v3 keeps participant identity separate and adds performance dir
   }
 });
 
+test('ElevenLabs v3 prioritises live conversation heat over the global delivery preset', async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'audio/mpeg' } });
+  };
+  try {
+    const provider = new ElevenLabsSpeechProvider({ apiKey: 'test', voiceMap: { speaker: 'voice-id' } });
+    await provider.synthesizeStream({
+      text: 'I think you are completely wrong, because that conclusion ignores the evidence.',
+      voice: 'speaker',
+      delivery: 'PASSIONATE',
+      deliveryHints: ['furious', 'selectively louder on key rebuttal words'],
+    });
+    assert.match(request.body.text, /^\[angry\]/);
+    assert.doesNotMatch(request.body.text, /^\[excited\]/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('ElevenLabs v3 can sigh before a contextual furious reaction without changing transcript text', async () => {
+  const originalFetch = globalThis.fetch;
+  let directedText;
+  globalThis.fetch = async (url, options) => {
+    directedText = JSON.parse(options.body).text;
+    return new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'audio/mpeg' } });
+  };
+  try {
+    const provider = new ElevenLabsSpeechProvider({ apiKey: 'test', voiceMap: { speaker: 'voice-id' } });
+    await provider.synthesizeStream({ text: 'For goodness’ sake, that ignores the central point.', voice: 'speaker', deliveryHints: ['furious'] });
+    assert.match(directedText, /^\[sighs\] \[angry\]/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('fallback voice mapping remains separate from voice identity', () => {
   const provider = new HttpSpeechProvider({
     id: 'existing', voices: ['awb'], baseUrl: 'http://127.0.0.1:1',

@@ -16,6 +16,12 @@ The intended experience is asynchronous generation followed by real-time listeni
 
 The built-in natural performers are original synthetic characters. The application does not clone or imitate real people.
 
+## Live Conversation Heat
+
+The sticky `Conversation Heat` control remains available above the show and can be changed while a conversation is running. `Docile`, `Calm`, `Balanced`, `Heated` and `Furious` jointly control dialogue direction, expressive TTS hints and the autonomous-listener threshold. Heated speakers seek a concrete counter-position and state it directly; Furious speakers may use varied natural exasperation, selective emphasis and earlier contextual barge-in. The prompts explicitly prohibit empty shouting, abuse, fabricated disagreement and repetitive catchphrases. A private debate-position evaluator retries any heated draft that reverses or muddles its assigned side.
+
+Each change is persisted with a heat revision and timestamp in JSON telemetry and Markdown export. It invalidates stale next-turn prefetch and restarts the audible-prefix listener against the current heat revision, without revealing unspoken text. The transcript sits below the pinned control area in a fixed-height window and automatically scrolls upward as new turns arrive.
+
 ## Run
 
 The qualified hpubuntu runtime uses the scripts in `scripts/` and the deployment units in `deploy/systemd/`. For a direct development start:
@@ -42,6 +48,7 @@ Length is user-defined from 2 to 40 turns. Every synthesized turn is archived as
 npm test
 node scripts/qualify-speech-router.mjs
 node scripts/qualify-natural-live-loop.mjs
+node scripts/qualify-conversation-heat.mjs
 ```
 
 The test suite also verifies PCM-to-WAV archival, bounded speech-stream reads and MP3 assembly arguments. Runtime MP3 production requires FFmpeg with `libmp3lame` support.
@@ -62,7 +69,7 @@ Grenade response generation is fail-safe: after ordinary retries, the system use
 
 ## Autonomous barge-in
 
-The setup screen exposes `Off`, `Polite`, `Natural`, `Argumentative` and `Chaos` interruption levels plus hard-cut and natural-duck audio policies. While a turn is playing, the browser opens only three sparse listener checkpoints. Each checkpoint sends the server the word count corresponding to the current playback position; the server reconstructs that prefix itself, so neither the small local monitor nor the interrupting participant sees the unspoken suffix.
+Conversation Heat maps internally to the existing `Off`, `Polite`, `Natural`, `Argumentative` and `Chaos` listener policies. While a turn is playing, the browser opens a heat-dependent bounded set of listener checkpoints—none for Docile and at most five for Furious. Each checkpoint sends the server the word count corresponding to the current playback position; the server reconstructs that prefix itself, so neither the small local monitor nor the interrupting participant sees the unspoken suffix.
 
 The monitor returns a typed `LISTEN`, `PREPARE` or `INTERRUPT` decision with a reason category, urgency and confidence. If an interruption commits, the current transcript row is reduced to the words actually heard, stale prefetch is deleted, the interrupter receives the next turn and the interrupted speaker receives the following reaction turn. The generated-but-unspoken suffix remains private in the persistence record and is removed from API and export responses. Human `Throw a Grenade` input cancels any pending model interruption and remains highest priority.
 

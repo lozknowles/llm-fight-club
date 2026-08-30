@@ -73,6 +73,10 @@ The browser never sends future text to the monitor. It sends a turn ID and heard
 
 Human audience intervention pre-empts the state machine: it cancels pending model events, stops playback, invalidates prefetch and installs its own forced response queue. Autonomous interruption and reaction turns have a one-exchange cooldown, preventing recursive interruption loops.
 
+`ConversationHeat` is a live director input above this policy. The five public values map to the existing interruption thresholds, but also supply bounded turn-generation and speech-delivery direction. A heat change is revisioned, persisted, added to telemetry, invalidates stale prefetched dialogue and restarts browser checkpoints with revision-qualified identifiers. This lets Furious increase checkpoint frequency and interruption propensity without random timers or access to future words. Heat remains separate from `PersonalityProfile`: the personality is persistent character identity, while heat is transient programme direction.
+
+The browser keeps the sticky heat panel outside the transcript scroller. The transcript itself is a fixed-height, overflow-scrolling live region; render completion moves it to the newest turn so earlier dialogue travels upward without growing the entire document.
+
 These boundaries map cleanly to future Agent Control capabilities—`conversation.generate`, `conversation.interruption.evaluate`, `speech.synthesize.live`, `speech.cancel` and `speech.postprocess`—without naming a machine in `ConversationEngine`. Agent Control itself is not imported or modified.
 
 ## Deployment boundary
