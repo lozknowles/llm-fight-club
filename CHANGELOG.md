@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-30 — State-aware transport controls
+
+- Transport buttons now expose only actions valid for the current conversation state.
+- `Resume` is disabled while active, `Pause` is disabled while paused, and `Skip speech` is available only during active playback.
+- All transport and audience-intervention controls become visibly disabled after completion, stop or error.
+- Added focused tests for active playback, preparation, pause and terminal states.
+
 ## 2026-08-30 — Non-stalling grenade recovery
 
 - Route intervention validation through the stronger local Qwen3 model.

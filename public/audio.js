@@ -1,4 +1,5 @@
 import { pcmS16leToWav } from './audio-format.js';
+import { controlAvailability } from './control-state.js';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -377,6 +378,14 @@ function participant(card) {
 function render() {
   if (!conversation) return;
   $('#status').textContent = `${conversation.format} · ${conversation.state} · ${conversation.transcript.length}/${conversation.turnLimit} · ${speechProfile}`;
+  const controls = controlAvailability(conversation);
+  $('#pause').disabled = !controls.pause;
+  $('#resume').disabled = !controls.resume;
+  $('#skip').disabled = !controls.skip;
+  $('#stop').disabled = !controls.stop;
+  $('#grenadeText').disabled = !controls.intervention;
+  $('#grenadeThrow').disabled = !controls.intervention;
+  $('#grenadeMic').disabled = !controls.intervention || !SpeechRecognitionClass;
   $('#transcript').innerHTML = conversation.transcript.map((turn, index) => {
     const participantIndex = conversation.participants.findIndex((item) => item.id === turn.speaker_id);
     const speaking = conversation.awaitingPlayback && index === conversation.transcript.length - 1 ? 'speaking' : '';
