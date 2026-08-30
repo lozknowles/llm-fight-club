@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-30 - Conversation repetition guard
+
+- Detect near-verbatim and heavily paraphrased repetition against each participant's recent turns.
+- Retry rejected drafts with a compact prompt that forbids exhausted lines and requires a new conversational angle.
+- Require interviewers to change avenue after two follow-ups on the same thread.
+- Compact and deduplicate character-state claims before returning them to model context.
+- Record repetition scores and retry counts in turn telemetry.
+- Add regression coverage for looping dialogue, legitimate new angles and claim compaction.
+
 ## 2026-08-30 - Voice and programme speed controls
 
 - Add an independent 0.75×–1.25× synthesis-speed selector to every participant.

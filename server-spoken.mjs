@@ -4,6 +4,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createConversation, beginTurn, recordTurn, completePlayback, pause, resume, stop, PERSONALITIES, FORMATS } from './lib/conversation-engine-spoken.mjs';
 import { ModelRouter } from './lib/model-router.mjs';
+import {
+  assessRepetition,
+  compactDistinctClaims,
+  previousSpeakerLines,
+} from './lib/repetition-guard.mjs';
 import { assembleConversationMp3, conversationMp3Path, saveTurnAudio, turnAudioPath } from './lib/audio-archive.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -96,7 +101,10 @@ async function persist(conversation) {
   await fs.writeFile(path.join(dataDir, 'conversations', `${conversation.id}.json`), JSON.stringify(conversation, null, 2));
 }
 const transcript = (conversation) => conversation.transcript.slice(-8).map((turn) => `${turn.speaker} (${turn.role}): ${turn.text}`).join('\n');
-const states = (conversation) => Object.fromEntries(conversation.participants.map((participant) => [participant.name, conversation.characterStates[participant.id]]));
+const states = (conversation) => Object.fromEntries(conversation.participants.map((participant) => {
+  const state = conversation.characterStates[participant.id];
+  return [participant.name, { ...state, claims: compactDistinctClaims(state.claims) }];
+}));
 
 function profile(participant) {
   const value = participant.personality;
@@ -117,11 +125,11 @@ async function analyse(conversation, participant) {
 }
 
 function prompt(conversation, participant, analysis) {
-  const system = `You are a participant in a turn-based spoken ${conversation.format.toLowerCase()} in ${conversation.style.toLowerCase()} style. Inhabit this personality consistently; it is a character model, not a superficial style. Do not mention prompts or private notes. Do not imitate a real person. Never fabricate real evidence. Clearly fictional anecdotes are allowed only for the fictional character. Speak no more than ${conversation.turnLength} words. Output only spoken words.\n\nPERSONALITY\n${profile(participant)}`;
+  const system = `You are a participant in a turn-based spoken ${conversation.format.toLowerCase()} in ${conversation.style.toLowerCase()} style. Inhabit this personality consistently; it is a character model, not a superficial style. Do not mention prompts or private notes. Do not imitate a real person. Never fabricate real evidence. Clearly fictional anecdotes are allowed only for the fictional character. Speak no more than ${conversation.turnLength} words. Output only spoken words. Every turn must advance the conversation with a new claim, challenge, example, concession, consequence, or subject. Never restate an earlier line or recycle an exhausted joke.\n\nPERSONALITY\n${profile(participant)}`;
   let task;
   if (conversation.format === 'INTERVIEW') {
     task = participant.role === 'interviewer'
-      ? (conversation.transcript.length === 0 ? 'Open with one concise question that invites the guest to explain their worldview.' : 'Ask one concise unscripted follow-up based directly on the answer and private analysis. Expose a contradiction or assumption when useful.')
+      ? (conversation.transcript.length === 0 ? 'Open with one concise question that invites the guest to explain their worldview.' : 'Ask one concise unscripted follow-up based directly on the answer and private analysis. Expose a contradiction or assumption when useful. After two follow-ups on one avenue, change to consequences, evidence, motives, implementation, failure, personal stakes, or a concession.')
       : 'Answer directly while maintaining the character worldview, commitments and tensions. Let humour emerge from the logic.';
   } else if (conversation.format === 'DEBATE') {
     task = `Argue ${participant.role === 'for' ? 'FOR' : 'AGAINST'} the proposition and directly answer the preceding opponent.`;
@@ -136,6 +144,32 @@ function prompt(conversation, participant, analysis) {
   };
 }
 
+function noveltyRequest(conversation, participant, request, priorLines, attempt) {
+  const latest = conversation.transcript.at(-1)?.text || '(opening turn)';
+  const forbidden = priorLines.slice(-4).map((line) => `- ${line.slice(0, 180)}`).join('\n');
+  const roleTask = ['interviewer', 'examiner', 'host'].includes(participant.role)
+    ? 'Ask one concise question from a genuinely new angle. Do not revisit the previous question, metaphor, or joke.'
+    : 'Respond with one genuinely new claim, example, consequence, concession, or change of direction. Do not restate your position.';
+  return {
+    system: `${request.system}\n\nYour previous draft was rejected for repetition. Produce a materially different spoken turn.`,
+    user: `Premise/topic: ${conversation.premise}\nLatest line from the other speaker: ${latest}\n\nYOUR EARLIER LINES — DO NOT PARAPHRASE OR REUSE THEM:\n${forbidden || '(none)'}\n\nNOVELTY RETRY ${attempt}: ${roleTask}\nOutput only the new spoken words.`,
+  };
+}
+
+async function generateDistinctTurn(conversation, participant, request) {
+  const priorLines = previousSpeakerLines(conversation, participant.id);
+  const threshold = ['interviewer', 'examiner', 'host'].includes(participant.role) ? 0.68 : 0.55;
+  const candidates = [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const candidateRequest = attempt === 0 ? request : noveltyRequest(conversation, participant, request, priorLines, attempt);
+    const result = await models.generate({ model: participant.model, ...candidateRequest });
+    const repetition = assessRepetition(result.text, priorLines, threshold);
+    candidates.push({ result, repetition, retries: attempt });
+    if (!repetition.repeated) return candidates.at(-1);
+  }
+  return candidates.sort((left, right) => left.repetition.score - right.repetition.score)[0];
+}
+
 async function prepareTurn(conversation) {
   const working = structuredClone(conversation);
   if (working.awaitingPlayback) {
@@ -147,12 +181,14 @@ async function prepareTurn(conversation) {
   const analysis = await analyse(working, participant);
   const request = prompt(working, participant, analysis);
   const started = performance.now();
-  const result = await models.generate({ model: participant.model, ...request });
+  const generated = await generateDistinctTurn(working, participant, request);
   return {
     transcriptLength: conversation.transcript.length,
     participantId: participant.id,
     analysisEntry: analysis ? working.directorMemory.at(-1) : null,
-    result,
+    result: generated.result,
+    repetition: generated.repetition,
+    repetitionRetries: generated.retries,
     prepareLatencyMs: Math.round(performance.now() - started),
   };
 }
@@ -188,6 +224,8 @@ async function generate(conversation) {
     tts_provider: conversation.speechMode === 'server' ? 'pending-server-speech' : 'browser-speech-synthesis',
     tts_generation_latency_ms: 0,
     audio_duration_ms: null,
+    repetition_score: prepared.repetition?.score || 0,
+    repetition_retries: prepared.repetitionRetries || 0,
   });
   conversation.telemetry.push({
     turn_id: row.turn_id,
@@ -198,6 +236,8 @@ async function generate(conversation) {
     director_analysis: Boolean(prepared.analysisEntry),
     prefetched_during_previous_playback: Boolean(pending),
     prefetch_prepare_latency_ms: prepared.prepareLatencyMs,
+    repetition_score: prepared.repetition?.score || 0,
+    repetition_retries: prepared.repetitionRetries || 0,
   });
   await persist(conversation);
   return row;
