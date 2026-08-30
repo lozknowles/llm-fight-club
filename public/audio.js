@@ -23,10 +23,18 @@ let scheduledEnd = 0;
 let streamComplete = false;
 let previousSpeechEndedAt = null;
 let metrics = {};
+let currentTurn = null;
+let bargeMonitor = null;
+let bargeBusy = false;
+let bargeGeneration = 0;
+let bargeCheckpointIndex = 0;
+let pendingInterruptionTiming = null;
 const player = $('#player');
 const archivePlayer = $('#archivePlayer');
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const audioContext = AudioContextClass ? new AudioContextClass({ latencyHint: 'interactive', sampleRate: 24000 }) : null;
+const speechGain = audioContext ? audioContext.createGain() : null;
+if (speechGain) speechGain.connect(audioContext.destination);
 const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
 let grenadeRecognition = null;
 
@@ -59,6 +67,124 @@ function responseMetrics(response, began) {
     audio_duration_ms: null,
     inter_speaker_silence_ms: null,
   };
+}
+
+function clearBargeMonitor() {
+  if (bargeMonitor) clearInterval(bargeMonitor);
+  bargeMonitor = null;
+  bargeBusy = false;
+  bargeGeneration += 1;
+}
+
+function heardWordCount(turn, fraction) {
+  const count = String(turn.text || '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.min(count - 1, Math.floor(count * Math.max(0, Math.min(.98, fraction)))));
+}
+
+function playbackFraction(turn) {
+  const estimatedDurationMs = Math.max(1800, String(turn.text || '').split(/\s+/).length / (2.45 * (turn.speech_rate || 1)) * 1000);
+  const durationMs = Number.isFinite(player.duration) && player.duration > 0 ? player.duration * 1000 : estimatedDurationMs;
+  const elapsedMs = Number.isFinite(player.currentTime) && player.currentTime > 0 ? player.currentTime * 1000 : Math.max(0, performance.now() - startedAt);
+  return Math.max(0, Math.min(.98, elapsedMs / durationMs));
+}
+
+async function reportInterruptionAudible(turn) {
+  if (!turn?.autonomous_interruption || !turn.interruption_id || !pendingInterruptionTiming) return;
+  const now = performance.now();
+  api(`/api/conversations/${conversation.id}/barge-in/audible`, 'POST', {
+    interruptionId: turn.interruption_id,
+    decisionToListenerAudioMs: Math.round(now - pendingInterruptionTiming.decidedAt),
+    claimToListenerAudioMs: Math.round(now - pendingInterruptionTiming.claimBeganAt),
+  }).catch(() => {});
+  pendingInterruptionTiming = null;
+}
+
+async function duckAndStop() {
+  if (conversation.interruptionAudio === 'HARD_CUT') {
+    stopAudio();
+    return 0;
+  }
+  const began = performance.now();
+  if (!player.paused) {
+    for (const volume of [.65, .35, .12]) {
+      player.volume = volume;
+      await new Promise((resolve) => setTimeout(resolve, 55));
+    }
+  }
+  if (speechGain && audioContext) {
+    speechGain.gain.cancelScheduledValues(audioContext.currentTime);
+    speechGain.gain.setValueAtTime(speechGain.gain.value, audioContext.currentTime);
+    speechGain.gain.linearRampToValueAtTime(.05, audioContext.currentTime + .16);
+    await new Promise((resolve) => setTimeout(resolve, 165));
+  }
+  stopAudio();
+  return Math.round(performance.now() - began);
+}
+
+async function evaluateCheckpoint(turn, fraction, checkpoint, generation) {
+  if (bargeBusy || settled || generation !== bargeGeneration || conversation.interruptionLevel === 'OFF') return;
+  bargeBusy = true;
+  const playbackMs = startedAt ? Math.max(0, Math.round(performance.now() - startedAt)) : 0;
+  try {
+    const result = await api(`/api/conversations/${conversation.id}/barge-in/evaluate`, 'POST', {
+      turnId: turn.turn_id,
+      heardWordCount: heardWordCount(turn, fraction),
+      playbackMs,
+      checkpoint,
+    });
+    if (generation !== bargeGeneration || settled || !conversation.awaitingPlayback || conversation.transcript.at(-1)?.turn_id !== turn.turn_id) return;
+    conversation = result.conversation;
+    const decision = result.decision;
+    $('#bargeInStatus').textContent = `${decision.action}: ${decision.participantName || 'listeners'} — ${decision.reason} (${decision.monitorLatencyMs || 0} ms)`;
+    if (decision.action !== 'INTERRUPT') return;
+    settled = true;
+    clearBargeMonitor();
+    if (completionWatch) clearInterval(completionWatch);
+    completionWatch = null;
+    const decidedAt = performance.now();
+    const cancelLatencyMs = await duckAndStop();
+    const actualHeardWordCount = heardWordCount(turn, playbackFraction(turn));
+    const committed = await api(`/api/conversations/${conversation.id}/barge-in/commit`, 'POST', {
+      turnId: turn.turn_id,
+      playbackMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      heardWordCount: actualHeardWordCount,
+      overlapMs: 0,
+      cancelLatencyMs,
+      commitLatencyMs: Math.round(performance.now() - decidedAt),
+    });
+    conversation = committed.conversation;
+    pendingInterruptionTiming = { decidedAt, claimBeganAt: startedAt };
+    $('#bargeInStatus').textContent = `${committed.event.interrupterId === decision.participantId ? decision.participantName : 'Listener'} interrupted: ${decision.reason}`;
+    render();
+    await next();
+  } catch (error) {
+    if (generation === bargeGeneration && error.name !== 'AbortError') $('#bargeInStatus').textContent = `Listener deferred: ${error.message}`;
+  } finally {
+    bargeBusy = false;
+  }
+}
+
+function startBargeMonitor(turn) {
+  clearBargeMonitor();
+  if (!turn || conversation.interruptionLevel === 'OFF' || turn.autonomous_interruption || turn.interruption_reaction) return;
+  const checkpoints = [.32, .56, .79];
+  const generation = bargeGeneration;
+  bargeCheckpointIndex = 0;
+  bargeMonitor = setInterval(() => {
+    if (settled || generation !== bargeGeneration || bargeCheckpointIndex >= checkpoints.length) return;
+    const fraction = playbackFraction(turn);
+    const target = checkpoints[bargeCheckpointIndex];
+    if (fraction < target) return;
+    bargeCheckpointIndex += 1;
+    evaluateCheckpoint(turn, fraction, `P${bargeCheckpointIndex}`, generation);
+  }, 150);
+}
+
+function speechBegan(turn) {
+  render();
+  reportInterruptionAudible(turn);
+  startBargeMonitor(turn);
+  if (conversation?.id) api(`/api/conversations/${conversation.id}/prefetch`, 'POST', {}).catch(() => {});
 }
 
 function pcmFloats(bytes, carry) {
@@ -102,7 +228,7 @@ async function streamPcm(response, began) {
     buffer.copyToChannel(decoded.samples, 0);
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(audioContext.destination);
+    source.connect(speechGain || audioContext.destination);
     const startAt = Math.max(scheduledEnd, audioContext.currentTime + 0.025);
     source.start(startAt);
     scheduledEnd = startAt + buffer.duration;
@@ -114,12 +240,7 @@ async function streamPcm(response, began) {
       metrics.first_playable_ms = Math.round(performance.now() - began + untilStartMs);
       startedAt = performance.now() + untilStartMs;
       metrics.inter_speaker_silence_ms = previousSpeechEndedAt == null ? null : Math.max(0, Math.round(startedAt - previousSpeechEndedAt));
-      render();
-      if (conversation?.id) {
-        api(`/api/conversations/${conversation.id}/prefetch`, 'POST', {}).catch((error) => {
-          console.warn('Turn prefetch was unavailable', error);
-        });
-      }
+      speechBegan(currentTurn);
     }
   }
   streamComplete = true;
@@ -143,12 +264,12 @@ async function playContainer(response, began) {
   metrics.stream_complete_ms = metrics.first_decodable_ms;
   audioUrl = URL.createObjectURL(new Blob(chunks, { type: response.headers.get('content-type') || 'audio/wav' }));
   player.src = audioUrl;
+  player.volume = 1;
   player.onplay = () => {
     startedAt = performance.now();
     metrics.first_playable_ms = Math.round(startedAt - began);
     metrics.inter_speaker_silence_ms = previousSpeechEndedAt == null ? null : Math.max(0, Math.round(startedAt - previousSpeechEndedAt));
-    render();
-    if (conversation?.id) api(`/api/conversations/${conversation.id}/prefetch`, 'POST', {}).catch(() => {});
+    speechBegan(currentTurn);
   };
   player.onended = () => finish(false);
   player.onerror = () => { $('#error').textContent = 'Audio playback failed'; };
@@ -156,6 +277,8 @@ async function playContainer(response, began) {
 }
 
 async function speech(turn) {
+  currentTurn = turn;
+  if (speechGain) speechGain.gain.value = 1;
   const began = performance.now();
   streamAbort = new AbortController();
   const slowNotice = setTimeout(() => {
@@ -193,12 +316,14 @@ async function speech(turn) {
 }
 
 function roles() {
-  return {
+  const selected = {
     INTERVIEW: [['interviewer', 'INTERVIEWER'], ['guest', 'GUEST']],
     DEBATE: [['for', 'FOR'], ['against', 'AGAINST']],
     PANEL: [['host', 'HOST'], ['panelist', 'PANELIST 1'], ['panelist', 'PANELIST 2']],
     CROSS_EXAMINATION: [['examiner', 'EXAMINER'], ['witness', 'WITNESS']],
   }[$('#format').value];
+  if ($('#format').value === 'DEBATE' && $('#refereeEnabled').value === 'true') selected.push(['referee', 'REFEREE']);
+  return selected;
 }
 
 function configure() {
@@ -209,6 +334,7 @@ function configure() {
     card.style.display = list[index] ? 'block' : 'none';
   });
   $('#third').style.display = list.length === 3 ? 'block' : 'none';
+  $('#refereeOption').hidden = $('#format').value !== 'DEBATE';
   $('#setup .primary').textContent = `START ${$('#format').value.replace('_', ' ')}`;
 }
 
@@ -258,12 +384,15 @@ function render() {
       ? ` · first playable ${metrics.first_playable_ms ?? 'waiting'} ms · provider ${metrics.provider || 'routing'}`
       : '';
     const audio = turn.audio_file ? ` · <a href="${endpoint(`/api/conversations/${conversation.id}/audio/${turn.turn_id}.wav`)}" download="turn-${turn.turn_index + 1}.wav">WAV</a>` : '';
+    const interruption = turn.interrupted ? ` · interrupted by ${escapeHtml(turn.interrupted_by_name || 'listener')}` : turn.autonomous_interruption ? ' · autonomous interruption' : turn.interruption_reaction ? ' · interruption response' : '';
     return `<article class="turn ${speaking}" style="--accent:${['#63d2ff', '#ff6b9a', '#ffd166'][participantIndex % 3]}">
-      <b>${turn.speaker}</b> <span class="meta">${turn.role} · ${turn.model} · voice ${turn.voice} · voice speed ${turn.speech_rate || 1}×</span>
-      <p>${turn.text}</p>
-      <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${live}${audio}</span>
+      <b>${escapeHtml(turn.speaker)}</b> <span class="meta">${escapeHtml(turn.role)} · ${escapeHtml(turn.model)} · voice ${escapeHtml(turn.voice)} · voice speed ${turn.speech_rate || 1}×</span>
+      <p>${escapeHtml(turn.text)}</p>
+      <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${interruption}${live}${audio}</span>
     </article>`;
   }).join('');
+  const latestDecision = (conversation.interruptionTelemetry || []).at(-1);
+  if (latestDecision && !conversation.awaitingPlayback) $('#bargeInStatus').textContent = `${latestDecision.action}: ${latestDecision.participantName || 'listeners'} — ${latestDecision.reason}`;
   $('#grenadeHistory').innerHTML = (conversation.audienceInterventions || []).slice().reverse().map((item) => {
     const pending = item.pendingParticipantIds?.length || 0;
     return `<div class="intervention"><b>💣 Audience curve ball</b><p>${escapeHtml(item.text)}</p><span class="meta">${pending ? `${pending} participant${pending === 1 ? '' : 's'} still to address it` : 'Addressed by everyone'}</span></div>`;
@@ -287,6 +416,7 @@ function escapeHtml(value) {
 }
 
 function stopAudio() {
+  clearBargeMonitor();
   player.pause();
   if (streamAbort) streamAbort.abort();
   streamAbort = null;
@@ -299,6 +429,7 @@ function stopAudio() {
 async function finish(skipped = false) {
   if (settled) return;
   settled = true;
+  clearBargeMonitor();
   if (completionWatch) clearInterval(completionWatch);
   completionWatch = null;
   previousSpeechEndedAt = performance.now();
@@ -358,6 +489,8 @@ $('#setup').onsubmit = async (event) => {
       turnLength: 55,
       speechMode: 'server-streaming',
       speechProfile,
+      interruptionLevel: $('#interruptionLevel').value,
+      interruptionAudio: $('#interruptionAudio').value,
       participants,
     });
     $('#setup').style.display = 'none';
@@ -373,6 +506,7 @@ $('#setup').onsubmit = async (event) => {
 };
 
 $('#format').onchange = configure;
+$('#refereeEnabled').onchange = configure;
 $('#archivePlaybackRate').onchange = () => {
   archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
   archivePlayer.preservesPitch = true;
@@ -407,8 +541,11 @@ $('#grenadeThrow').onclick = async () => {
     if (completionWatch) clearInterval(completionWatch);
     completionWatch = null;
     const durationMs = startedAt ? Math.max(0, Math.round(performance.now() - startedAt)) : null;
+    const estimatedDurationMs = currentTurn ? Math.max(1800, String(currentTurn.text || '').split(/\s+/).length / (2.45 * (currentTurn.speech_rate || 1)) * 1000) : 1;
+    const playableDurationMs = Number.isFinite(player.duration) && player.duration > 0 ? player.duration * 1000 : estimatedDurationMs;
+    const heardWordCountValue = currentTurn && durationMs ? heardWordCount(currentTurn, durationMs / playableDurationMs) : null;
     stopAudio();
-    conversation = await api(`/api/conversations/${conversation.id}/intervention`, 'POST', { text, durationMs });
+    conversation = await api(`/api/conversations/${conversation.id}/intervention`, 'POST', { text, durationMs, heardWordCount: heardWordCountValue });
     $('#grenadeText').value = '';
     $('#grenadeStatus').textContent = 'Curve ball thrown. Everyone must respond.';
     render();

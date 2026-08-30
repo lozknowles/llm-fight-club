@@ -47,6 +47,32 @@ The same-origin application proxy tees each successful turn into `TurnAudioStore
 
 Conversation length is a user-supplied turn limit bounded to 2–40. Per-turn WAV routes and the final MP3 route validate conversation and turn identifiers against the conversation registry before reading the configured data directory. The registry is restored from persisted conversation JSON during application startup, preserving export URLs across service restarts.
 
+## Interruption director
+
+Autonomous barge-in is an additive director capability above the provider-neutral engine:
+
+```text
+audio playback position
+  -> audible word-prefix checkpoint (32%, 56%, 79%)
+  -> conversation.interruption.evaluate (small local model)
+     -> LISTEN | PREPARE | INTERRUPT
+  -> policy threshold + PersonalityProfile traits
+  -> interruption commit
+     -> invalidate prefetch
+     -> truncate public transcript to actually heard prefix
+     -> speech.cancel (hard cut or 165 ms duck-to-stop)
+     -> force interrupter turn
+     -> force interrupted-speaker reaction
+```
+
+The browser never sends future text to the monitor. It sends a turn ID and heard-word count derived from actual media time when container duration is known, or from a documented words-per-second estimate for raw streaming PCM. The server reconstructs the prefix from its canonical turn and excludes the current full turn from monitor context. At commit it takes a fresh playback-position word count so model-decision latency cannot cause actually heard words to disappear from the transcript.
+
+`InterruptionDecision` records action, participant, typed reason, urgency, confidence, score, threshold, monitor model, latency, token usage, local cost basis, checkpoint and heard prefix. `ModelIntervention` records interrupted/interrupter identities, timestamps, playback duration, cancel latency, controlled overlap, decision and final heard prefixes, audio policy, interruption turn and reaction turn. Generated-but-unspoken text is retained only in private persistence fields and scrubbed from API and JSON export responses.
+
+Human audience intervention pre-empts the state machine: it cancels pending model events, stops playback, invalidates prefetch and installs its own forced response queue. Autonomous interruption and reaction turns have a one-exchange cooldown, preventing recursive interruption loops.
+
+These boundaries map cleanly to future Agent Control capabilities—`conversation.generate`, `conversation.interruption.evaluate`, `speech.synthesize.live`, `speech.cancel` and `speech.postprocess`—without naming a machine in `ConversationEngine`. Agent Control itself is not imported or modified.
+
 ## Deployment boundary
 
 Only the conversation application is reverse-proxied publicly. LLM and speech-provider ports remain on loopback or the private Tailscale interface. Browser speech calls pass through the application's same-origin `/tts/` proxy, allowing deployment under an unlisted URL prefix without CORS exposure.

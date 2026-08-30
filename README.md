@@ -1,6 +1,6 @@
 # LLM Fight Club / Spoken AI Studio
 
-A general turn-based spoken multi-agent conversation engine. Debate was the first format; v0.2 also supports interview, panel and cross-examination formats with reusable personality profiles, compact character state, dynamic interviewer follow-ups, durable transcripts and browser-controlled audio sequencing.
+A general spoken multi-agent conversation engine. Debate was the first format; v0.3 also supports interview, panel and cross-examination formats with reusable personality profiles, compact character state, dynamic interviewer follow-ups, durable transcripts, browser-controlled audio sequencing and model-initiated barge-in.
 
 The intended experience is asynchronous generation followed by real-time listening: the user starts a programme, waits while each line is generated and synthesized, then hears it play at natural speed. Playback completion—not a timer—authorizes the next LLM turn.
 
@@ -57,6 +57,22 @@ The hidden deployment also exposes three explicitly labelled ElevenLabs v3 choic
 Every participant can now combine a built-in original fictional profile with an optional free-form personality prompt. The prompt is bounded, stored with the conversation and applied as character direction without changing model, role or voice identity. Built-in comic archetypes use broad mechanisms such as reclusive puzzle logic, erudite digression and anxious existential escalation; they do not impersonate named performers or reproduce protected characters.
 
 During a live show, `Throw a Grenade` accepts a typed comment or browser speech recognition. Throwing it interrupts current playback, discards any prefetched next reply and gives the interrupted participant the immediate response. Every other participant then responds in turn. A private semantic check prevents unrelated continuation from being falsely marked as acknowledgement.
+
+## Autonomous barge-in
+
+The setup screen exposes `Off`, `Polite`, `Natural`, `Argumentative` and `Chaos` interruption levels plus hard-cut and natural-duck audio policies. While a turn is playing, the browser opens only three sparse listener checkpoints. Each checkpoint sends the server the word count corresponding to the current playback position; the server reconstructs that prefix itself, so neither the small local monitor nor the interrupting participant sees the unspoken suffix.
+
+The monitor returns a typed `LISTEN`, `PREPARE` or `INTERRUPT` decision with a reason category, urgency and confidence. If an interruption commits, the current transcript row is reduced to the words actually heard, stale prefetch is deleted, the interrupter receives the next turn and the interrupted speaker receives the following reaction turn. The generated-but-unspoken suffix remains private in the persistence record and is removed from API and export responses. Human `Throw a Grenade` input cancels any pending model interruption and remains highest priority.
+
+Debate can optionally add a third, distinct-voice referee. The referee participates only when the listener policy identifies evasion, contradiction, missing factual grounding or a point of order. Per-personality interruption frequency, patience, assertiveness, politeness, argumentativeness and comic timing influence the director threshold without becoming deterministic rules.
+
+Run the focused live qualification with:
+
+```bash
+QUALIFICATION_BASE_URL=http://127.0.0.1:18770 node scripts/qualify-barge-in.mjs
+```
+
+See `DUPLEX-BARGE-IN.md` for the state machine, telemetry, measured qualification and current timing limitation.
 
 ## Privacy and release
 

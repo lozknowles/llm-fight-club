@@ -35,7 +35,11 @@
       <label>FORMAT<select id="format"><option>INTERVIEW</option><option>DEBATE</option><option>PANEL</option><option>CROSS_EXAMINATION</option></select></label>
       <label>STYLE<select id="style"><option>SATIRICAL</option><option>SERIOUS</option><option>FRIENDLY</option><option>INVESTIGATIVE</option><option>ABSURDIST</option></select></label>
       <label>DELIVERY<select id="delivery"><option selected>PASSIONATE</option><option>BALANCED</option><option>RESTRAINED</option></select></label>
+      <label>MODEL INTERRUPTION LEVEL<select id="interruptionLevel"><option>OFF</option><option>POLITE</option><option selected>NATURAL</option><option>ARGUMENTATIVE</option><option>CHAOS</option></select></label>
+      <label>INTERRUPTION AUDIO<select id="interruptionAudio"><option value="NATURAL_DUCK" selected>Natural duck (brief fade)</option><option value="HARD_CUT">Hard cut</option></select></label>
+      <label id="refereeOption" hidden>DEBATE REFEREE<select id="refereeEnabled"><option value="false" selected>Off</option><option value="true">On — may interrupt</option></select></label>
     </div>
+    <p class="meta">Autonomous listeners inspect only words already audible. “Natural” uses three sparse checkpoints per turn; human grenades always take priority.</p>
     <label>TOPIC / PREMISE<textarea id="premise" rows="3">Why does your Institute for Forward Pavements believe every town needs a Department of Strategic Queuing?</textarea></label>
     <label>LENGTH (TURNS, 2–40)<input id="turnLimit" type="number" min="2" max="40" step="1" value="4"></label>
     <div class="grid">
@@ -88,6 +92,10 @@
       <button type="button" id="grenadeThrow">Throw Grenade</button>
       <span id="grenadeStatus" class="meta" role="status"></span>
       <div id="grenadeHistory"></div>
+    </div>
+    <div id="bargeInHistory" class="grenade">
+      <h3>Autonomous listener</h3>
+      <p id="bargeInStatus" class="meta">Waiting for an audible checkpoint.</p>
     </div>
     <div id="archivePlayback" class="archive-player" hidden>
       <label>WHOLE CONVERSATION PLAYBACK SPEED

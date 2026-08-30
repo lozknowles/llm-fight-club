@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-30 — Autonomous LLM barge-in
+
+- Added typed `LISTEN`, `PREPARE` and `INTERRUPT` listener decisions driven by a small local monitor at three playback-synchronised checkpoints.
+- Added Off, Polite, Natural, Argumentative and Chaos policies plus per-personality patience, assertiveness, politeness, argumentativeness, interruption-frequency and comic-timing traits.
+- Added hard-cut and natural duck-to-stop playback cancellation policies.
+- Preserve the exact heard prefix, keep unspoken generated text private, invalidate stale prefetch and force an interrupter/reaction turn pair.
+- Added an optional distinct-voice debate referee capable of factual and point-of-order interruptions.
+- Added interruption timestamps, typed reason, latency, token, cost-basis, cancel, overlap and normal/interrupted-turn telemetry.
+- Kept typed and speech-input Throw a Grenade as the highest-priority interruption source.
+- Added live participant, referee and human-grenade qualification plus focused state-machine tests.
+
 ## 2026-08-30 — Genuine grenade responses
 
 - Give the interrupted speaker the immediate next turn before the remaining participants respond.
