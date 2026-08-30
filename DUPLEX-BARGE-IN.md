@@ -56,6 +56,23 @@ The referee acted on only:
 
 Both were exact canonical prefixes; public conversation objects contained no private unspoken field. Focused and regression tests pass 37/37.
 
+### Public browser timing
+
+A post-deployment browser run at the hidden LozKnowles.com route used Argumentative mode, natural duck and an enabled referee. Conversation `26f189ff-f5fa-46f9-92d3-599825e602d2` produced a referee interruption and the interrupted speaker's reaction without a client console warning or error.
+
+- Decision prefix: “So, specifically, Cedric—when your data’s bouncing between”
+- Final actually-heard prefix after decision and duck latency: “So, specifically, Cedric—when your data’s bouncing between servers in 17 countries, how secure is”
+- Monitor decision latency: 2,773 ms
+- Duck/cancel latency: 360 ms
+- Simultaneous audio overlap: 0 ms
+- Decision to referee first audible audio: 4,184 ms
+- Original claim playback start to referee first audible audio: 10,146 ms
+- Referee TTS first-playable latency: 754 ms
+- Monitor work: 2 evaluations, 1,418 tokens, self-hosted cost basis
+- Public export private-suffix check: passed
+
+The speech router selected FFmpeg/Flite fallback for this run despite the premium voice identities being selected. Barge-in behavior is therefore publicly qualified, while ElevenLabs provider availability remains a separate runtime/provider concern.
+
 The monitor is self-hosted, so its metered API cost is recorded as USD 0 with a local-compute cost basis. False-positive quality still requires human listening review and is reported as such rather than invented.
 
 ## Key UX metric
