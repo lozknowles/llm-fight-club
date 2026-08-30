@@ -23,6 +23,7 @@ let streamComplete = false;
 let previousSpeechEndedAt = null;
 let metrics = {};
 const player = $('#player');
+const archivePlayer = $('#archivePlayer');
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const audioContext = AudioContextClass ? new AudioContextClass({ latencyHint: 'interactive', sampleRate: 24000 }) : null;
 
@@ -171,10 +172,11 @@ async function speech(turn) {
         delivery: $('#delivery').value,
         format: conversation.format,
         style: conversation.style,
-      role: turn.role,
-      profile: speechProfile,
-      conversationId: conversation.id,
-      turnId: turn.turn_id,
+        role: turn.role,
+        speechRate: turn.speech_rate || 1,
+        profile: speechProfile,
+        conversationId: conversation.id,
+        turnId: turn.turn_id,
       }),
       signal: streamAbort.signal,
     });
@@ -227,6 +229,7 @@ function participant(card) {
     role: card.dataset.role,
     model: card.querySelector('.model').value,
     voice: card.querySelector('.voice').value,
+    speechRate: Number(card.querySelector('.speech-rate').value),
     personality,
   };
 }
@@ -242,12 +245,21 @@ function render() {
       : '';
     const audio = turn.audio_file ? ` · <a href="${endpoint(`/api/conversations/${conversation.id}/audio/${turn.turn_id}.wav`)}" download="turn-${turn.turn_index + 1}.wav">WAV</a>` : '';
     return `<article class="turn ${speaking}" style="--accent:${['#63d2ff', '#ff6b9a', '#ffd166'][participantIndex % 3]}">
-      <b>${turn.speaker}</b> <span class="meta">${turn.role} · ${turn.model} · voice ${turn.voice}</span>
+      <b>${turn.speaker}</b> <span class="meta">${turn.role} · ${turn.model} · voice ${turn.voice} · voice speed ${turn.speech_rate || 1}×</span>
       <p>${turn.text}</p>
       <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${live}${audio}</span>
     </article>`;
   }).join('');
-  $('#audioExport').hidden = conversation.audio?.status !== 'ready';
+  const audioReady = conversation.audio?.status === 'ready';
+  const archiveUrl = endpoint(`/api/conversations/${conversation.id}/conversation.mp3`);
+  $('#audioExport').hidden = !audioReady;
+  $('#archivePlayback').hidden = !audioReady;
+  if (audioReady && archivePlayer.dataset.conversationId !== conversation.id) {
+    archivePlayer.src = archiveUrl;
+    archivePlayer.dataset.conversationId = conversation.id;
+    archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
+    archivePlayer.preservesPitch = true;
+  }
 }
 
 function stopAudio() {
@@ -336,6 +348,10 @@ $('#setup').onsubmit = async (event) => {
 };
 
 $('#format').onchange = configure;
+$('#archivePlaybackRate').onchange = () => {
+  archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
+  archivePlayer.preservesPitch = true;
+};
 $('#pause').onclick = async () => {
   player.pause();
   if (audioContext) await audioContext.suspend();
@@ -372,6 +388,7 @@ $$('.preview').forEach((button) => {
           delivery: $('#delivery').value,
           format: $('#format').value,
           role: card.dataset.role,
+          speechRate: Number(card.querySelector('.speech-rate').value),
           profile: speechProfile,
         }),
       });

@@ -53,12 +53,16 @@ export class OpenAISpeechProvider extends SpeechProvider {
     const delivery = DELIVERY[String(request.delivery || 'PASSIONATE').toUpperCase()] || DELIVERY.PASSIONATE;
     const format = FORMAT[String(request.format || '').toUpperCase()] || '';
     const role = String(request.role || '').toLowerCase();
+    const speechRate = Math.max(0.7, Math.min(1.4, Number(request.speechRate) || 1));
+    const pace = speechRate === 1
+      ? 'Speak at a natural conversational speed.'
+      : `Speak at approximately ${speechRate.toFixed(2)}x natural conversational speed while preserving natural pitch, phrasing and comic timing.`;
     const position = role === 'for'
       ? 'Fight for the proposition with conviction and make disagreement audible.'
       : role === 'against'
         ? 'Oppose the proposition with conviction and make rebuttals bite.'
         : '';
-    const instructions = [PERFORMANCE[request.voice], format, delivery, position, hints && `Line delivery: ${hints}.`].filter(Boolean).join(' ');
+    const instructions = [PERFORMANCE[request.voice], format, delivery, pace, position, hints && `Line delivery: ${hints}.`].filter(Boolean).join(' ');
     return fetchWithTimeout(`${this.baseUrl}/audio/speech`, {
       method: 'POST',
       headers: {

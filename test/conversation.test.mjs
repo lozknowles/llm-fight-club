@@ -12,3 +12,9 @@ test('user-defined turn count is rounded and safely bounded',()=>{
   assert.equal(createConversation({format:'INTERVIEW',premise:'A',turnLimit:100,participants}).turnLimit,40);
   assert.equal(createConversation({format:'INTERVIEW',premise:'A',turnLimit:1,participants}).turnLimit,2);
 });
+test('participant speech speed is independent and bounded',()=>{
+  const participants=[{...participant('interviewer',0),speechRate:.5},{...participant('guest',1),speechRate:1.25}];
+  const conversation=createConversation({format:'INTERVIEW',premise:'A',participants});
+  assert.equal(conversation.participants[0].speechRate,.7);
+  assert.equal(conversation.participants[1].speechRate,1.25);
+});

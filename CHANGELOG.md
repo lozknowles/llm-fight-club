@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-30 - Voice and programme speed controls
+
+- Add an independent 0.75×–1.25× synthesis-speed selector to every participant.
+- Persist participant speed on the conversation, transcript, telemetry, per-turn WAV and assembled MP3.
+- Direct OpenAI and Qwen performance pace without coupling it to synthetic voice identity.
+- Apply pitch-preserving FFmpeg tempo adjustment when Flite is used as the final fallback.
+- Add a completed-conversation player with adjustable 0.75×–2× playback speed while keeping the downloadable MP3 canonical.
+- Add regression coverage for speed bounds and OpenAI pace direction.
+
 ## 2026-08-30 - Conversation audio archive
 
 - Save every successfully synthesized turn as an individually downloadable WAV file.

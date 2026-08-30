@@ -30,7 +30,9 @@ Open `/audio.html`. The browser uses same-origin `/api/` and `/tts/` routes, so 
 
 The delivery selector defaults to `PASSIONATE`. It changes performance direction—emotional commitment, emphasis, pace and rebuttal energy—while keeping the selected synthetic voice identity stable. `BALANCED` and `RESTRAINED` are available for interviews or quieter programmes.
 
-Length is user-defined from 2 to 40 turns. Every synthesized turn is archived as an individual WAV. When a conversation completes—or is stopped after at least one recorded turn—the server uses FFmpeg to normalize the saved turns, inserts a 350 ms inter-speaker pause and publishes `conversation.mp3`. JSON, Markdown, per-turn WAV and MP3 downloads remain separate exports. Saved conversations are restored from the configured data directory when the application restarts, so their export URLs remain valid.
+Each participant also has an independent voice-speed setting from 0.75× to 1.25×. It is part of the participant performance configuration, not the base voice identity: OpenAI and Qwen receive explicit pace direction, while the Flite fallback uses pitch-preserving FFmpeg tempo adjustment. The selected rate is stored in the transcript and telemetry and is therefore baked into each turn WAV and the assembled MP3.
+
+Length is user-defined from 2 to 40 turns. Every synthesized turn is archived as an individual WAV. When a conversation completes—or is stopped after at least one recorded turn—the server uses FFmpeg to normalize the saved turns, inserts a 350 ms inter-speaker pause and publishes `conversation.mp3`. JSON, Markdown, per-turn WAV and MP3 downloads remain separate exports. The completed-conversation player offers 0.75×–2× listening speed without rewriting the archived MP3 and preserves voice pitch where the browser supports it. Saved conversations are restored from the configured data directory when the application restarts, so their export URLs remain valid.
 
 ## Verification
 

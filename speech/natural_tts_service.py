@@ -127,6 +127,7 @@ class Handler(BaseHTTPRequestHandler):
             text = str(payload.get('text', '')).strip()
             voice = str(payload.get('voice', ''))
             hints = payload.get('deliveryHints') or payload.get('delivery_hints') or []
+            speech_rate = max(0.7, min(1.4, float(payload.get('speechRate', 1) or 1)))
             if not text or len(text) > 4000:
                 raise ValueError('Text must be 1-4000 characters')
             if voice not in VOICES:
@@ -135,7 +136,7 @@ class Handler(BaseHTTPRequestHandler):
                 hints = [hints]
             hints = [str(value).strip() for value in hints if str(value).strip()][:8]
             delivery = ', '.join(hints) if hints else DEFAULT_DELIVERY[voice]
-            instruction = f"{IDENTITIES[voice]} Delivery for this line: {delivery}"
+            instruction = f"{IDENTITIES[voice]} Delivery for this line: {delivery}. Speak at approximately {speech_rate:.2f} times natural conversational speed while preserving natural pitch and phrasing."
             with MODEL_LOCK:
                 active_model = ensure_model()
                 torch.manual_seed(SEEDS[voice])

@@ -184,6 +184,7 @@ async function generate(conversation) {
       participant.personality.humourStyle,
       participant.personality.rhetoricalStyle,
     ].filter(Boolean),
+    speech_rate: participant.speechRate,
     tts_provider: conversation.speechMode === 'server' ? 'pending-server-speech' : 'browser-speech-synthesis',
     tts_generation_latency_ms: 0,
     audio_duration_ms: null,
@@ -192,6 +193,7 @@ async function generate(conversation) {
     turn_id: row.turn_id,
     participant_id: participant.id,
     model: participant.model,
+    speech_rate: participant.speechRate,
     model_latency_ms: result.latencyMs,
     director_analysis: Boolean(prepared.analysisEntry),
     prefetched_during_previous_playback: Boolean(pending),
@@ -201,7 +203,7 @@ async function generate(conversation) {
   return row;
 }
 
-const markdown = (conversation) => `# ${conversation.format}: ${conversation.premise}\n\n${conversation.transcript.map((turn) => `## ${turn.speaker} — ${turn.role}\n\n${turn.text}\n\n_Model: ${turn.model}; voice: ${turn.voice}; TTS: ${turn.tts_provider}; LLM: ${turn.generation_latency_ms} ms; TTS generation: ${turn.tts_generation_latency_ms} ms; playback: ${turn.audio_duration_ms ?? 'pending'} ms_`).join('\n\n')}`;
+const markdown = (conversation) => `# ${conversation.format}: ${conversation.premise}\n\n${conversation.transcript.map((turn) => `## ${turn.speaker} — ${turn.role}\n\n${turn.text}\n\n_Model: ${turn.model}; voice: ${turn.voice}; voice speed: ${turn.speech_rate || 1}x; TTS: ${turn.tts_provider}; LLM: ${turn.generation_latency_ms} ms; TTS generation: ${turn.tts_generation_latency_ms} ms; playback: ${turn.audio_duration_ms ?? 'pending'} ms_`).join('\n\n')}`;
 
 async function buildAudioExport(conversation) {
   try {

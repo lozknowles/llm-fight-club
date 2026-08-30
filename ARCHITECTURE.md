@@ -35,9 +35,11 @@ The engine owns state transitions. Neither an LLM nor speech provider can advanc
 
 ## Speech and playback
 
-Voice identity and delivery are separate. A participant chooses a stable synthetic voice identity while each generated turn supplies compact hints such as measured, dry, defensive or rapid. The speech router follows an explicit profile: `LIVE_FAST` starts with OpenAI streaming PCM, `STUDIO` starts with local Qwen VoiceDesign, and both retain distinct Flite voices as the final fallback.
+Voice identity, synthesis pace and playback pace are separate. A participant chooses a stable synthetic voice identity plus an independently bounded 0.7×–1.4× speech rate; the public presets expose 0.75×–1.25×. Each generated turn also supplies compact delivery hints such as measured, dry, defensive or rapid. The speech router follows an explicit profile: `LIVE_FAST` starts with OpenAI streaming PCM, `STUDIO` starts with local Qwen VoiceDesign, and both retain distinct Flite voices as the final fallback.
 
 The LIVE path also accepts an allow-listed delivery intensity (`PASSIONATE`, `BALANCED` or `RESTRAINED`) plus format and role. The OpenAI provider combines these with the stable voice identity to direct emotional range, intonation, pace and emphasis. No raw provider prompt or API credential is exposed to the browser.
+
+Participant speech rate travels with the participant and is copied onto every generated turn. OpenAI and Qwen express it as model performance direction; the Flite fallback uses FFmpeg `atempo`. This synthesis rate is baked into the saved WAV. By contrast, the completed-programme player changes only `HTMLMediaElement.playbackRate` (0.75×–2×) and requests pitch preservation, leaving the canonical MP3 unchanged.
 
 The LIVE transport streams raw 24 kHz PCM from compatible providers into a Web Audio scheduler; container providers use the persistent audio element. The browser calls `complete-playback` only after the scheduled audio ends. Slow generation therefore delays a turn but never shortens or overlaps its real-time playback. After three seconds without headers the UI explicitly reports that the voice is still preparing. Router first-byte and stream-idle deadlines prevent a provider from hanging a programme indefinitely and allow pre-playback fallback to the next qualified provider.
 

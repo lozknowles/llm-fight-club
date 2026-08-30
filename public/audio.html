@@ -18,6 +18,8 @@
   .speaking{box-shadow:0 0 0 3px #ffd166}
   .meta{font-size:.78rem;color:#bbaabd}
   .error{color:#ff8e9e}
+  .archive-player{margin-top:12px;padding-top:12px;border-top:1px solid #46384c}
+  .archive-player audio{width:100%;margin-top:8px}
   #third{display:none}
   @media(max-width:600px){body{padding:10px}.controls button{width:46%}}
 </style>
@@ -38,6 +40,7 @@
         <label>MODEL<select class="model"></select></label>
         <label>PERSONALITY<select class="personality"></select></label>
         <label>VOICE<select class="voice"></select></label>
+        <label>VOICE SPEED<select class="speech-rate"><option value="0.75">Slow · 0.75×</option><option value="0.9">Relaxed · 0.90×</option><option value="1" selected>Natural · 1.00×</option><option value="1.1">Brisk · 1.10×</option><option value="1.25">Fast · 1.25×</option></select></label>
         <button type="button" class="preview">Preview</button>
       </section>
       <section id="second" class="card participant" style="--accent:#ff6b9a">
@@ -45,6 +48,7 @@
         <label>MODEL<select class="model"></select></label>
         <label>PERSONALITY<select class="personality"></select></label>
         <label>VOICE<select class="voice"></select></label>
+        <label>VOICE SPEED<select class="speech-rate"><option value="0.75">Slow · 0.75×</option><option value="0.9">Relaxed · 0.90×</option><option value="1" selected>Natural · 1.00×</option><option value="1.1">Brisk · 1.10×</option><option value="1.25">Fast · 1.25×</option></select></label>
         <button type="button" class="preview">Preview</button>
       </section>
       <section id="third" class="card participant" style="--accent:#ffd166">
@@ -52,6 +56,7 @@
         <label>MODEL<select class="model"></select></label>
         <label>PERSONALITY<select class="personality"></select></label>
         <label>VOICE<select class="voice"></select></label>
+        <label>VOICE SPEED<select class="speech-rate"><option value="0.75">Slow · 0.75×</option><option value="0.9">Relaxed · 0.90×</option><option value="1" selected>Natural · 1.00×</option><option value="1.1">Brisk · 1.10×</option><option value="1.25">Fast · 1.25×</option></select></label>
         <button type="button" class="preview">Preview</button>
       </section>
     </div>
@@ -65,6 +70,12 @@
     <button id="skip">Skip speech</button>
     <button id="stop">Stop</button>
     <a id="jsonExport">JSON</a> · <a id="mdExport">Markdown</a> · <a id="audioExport" hidden download="conversation.mp3">Conversation MP3</a>
+    <div id="archivePlayback" class="archive-player" hidden>
+      <label>WHOLE CONVERSATION PLAYBACK SPEED
+        <select id="archivePlaybackRate"><option value="0.75">0.75×</option><option value="1" selected>1.00×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option><option value="2">2.00×</option></select>
+      </label>
+      <audio id="archivePlayer" controls preload="metadata"></audio>
+    </div>
   </section>
   <main id="transcript" aria-live="polite"></main>
   <audio id="player" preload="auto"></audio>
