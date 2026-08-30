@@ -18,3 +18,16 @@ test('participant speech speed is independent and bounded',()=>{
   assert.equal(conversation.participants[0].speechRate,.7);
   assert.equal(conversation.participants[1].speechRate,1.25);
 });
+test('participant personality direction is preserved and bounded',()=>{
+  const participants=[participant('interviewer',0),{...participant('guest',1),personality:{...PERSONALITIES[1],customPrompt:`  ${'x'.repeat(1400)}  `}}];
+  const conversation=createConversation({format:'INTERVIEW',premise:'A',participants});
+  assert.equal(conversation.participants[1].personality.customPrompt.length,1200);
+  assert.equal(conversation.participants[0].personality.customPrompt,'');
+});
+test('built-in comic archetypes remain original fictional personalities',()=>{
+  for(const id of ['theodore-gridley','crispin-bell','morris-fenn']){
+    const profile=PERSONALITIES.find(item=>item.id===id);
+    assert.ok(profile);
+    assert.match(profile.privateNotes,/Original fictional archetype/);
+  }
+});

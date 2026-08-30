@@ -54,6 +54,8 @@ The isolated `feature/tts-latency-bakeoff` branch adds purpose profiles, OpenAI 
 
 The hidden deployment also exposes three explicitly labelled ElevenLabs v3 choices: Daniel (British broadcaster) for interviewer, Lily (British character voice) for guest, and George (British storyteller) for host/referee. Their provider voice IDs and API credential live only in `.env.local`; selecting one of these identities routes to ElevenLabs while retaining the local speech fallback chain. Personality delivery hints are translated into non-spoken v3 performance directions without changing transcript text.
 
+Every participant can now combine a built-in original fictional profile with an optional free-form personality prompt. The prompt is bounded, stored with the conversation and applied as character direction without changing model, role or voice identity. Built-in comic archetypes use broad mechanisms such as reclusive puzzle logic, erudite digression and anxious existential escalation; they do not impersonate named performers or reproduce protected characters.
+
 ## Privacy and release
 
 Conversation transcripts and generated audio are stored server-side under the configured data directory. An unlisted URL is not authentication; production operators should add authentication, retention controls or rate limiting before treating the service as private. No homepage or navigation link is required.

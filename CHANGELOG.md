@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-30 — Participant personality prompts
+
+- Added a bounded free-form personality prompt for every participant, layered over the selected reusable profile.
+- Added Theodore Gridley, Crispin Bell and Morris Fenn as original fictional comic archetypes.
+- Added profile summaries in the setup UI and explicit safeguards against real-person, voice or protected-character imitation.
+
 ## 2026-08-30 — ElevenLabs v3 premium voices
 
 - Added three clearly labelled British ElevenLabs v3 voice identities for interviewer, guest and host/referee.

@@ -222,10 +222,19 @@ function fill() {
   const liveDefaults = ['live-interviewer', 'live-guest', 'live-host'];
   const defaults = premiumDefaults.every((id) => voices.includes(id)) ? premiumDefaults : liveDefaults;
   $$('.voice').forEach((select, index) => { select.value = defaults[index] || voices[index]; });
+  $$('.personality').forEach((select) => {
+    const updateSummary = () => {
+      const profile = config.personalities.find((item) => item.id === select.value);
+      select.closest('.participant').querySelector('.personality-summary').textContent = profile?.description || '';
+    };
+    select.onchange = updateSummary;
+    updateSummary();
+  });
 }
 
 function participant(card) {
   const personality = config.personalities.find((profile) => profile.id === card.querySelector('.personality').value);
+  const customPrompt = card.querySelector('.personality-prompt').value.trim();
   return {
     id: crypto.randomUUID(),
     name: personality.name,
@@ -233,7 +242,7 @@ function participant(card) {
     model: card.querySelector('.model').value,
     voice: card.querySelector('.voice').value,
     speechRate: Number(card.querySelector('.speech-rate').value),
-    personality,
+    personality: { ...personality, customPrompt },
   };
 }
 
