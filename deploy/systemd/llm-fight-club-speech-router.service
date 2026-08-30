@@ -1,0 +1,18 @@
+[Unit]
+Description=Spoken AI Studio provider-neutral speech router
+After=network-online.target llm-fight-club-flite.service llm-fight-club-natural-tts.service
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-20260829
+Environment=SPEECH_ROUTER_HOST=100.125.120.114
+Environment=SPEECH_ROUTER_PORT=18772
+Environment=NATURAL_TTS_URL=http://127.0.0.1:18773
+Environment=FLITE_TTS_URL=http://127.0.0.1:18774
+ExecStart=/usr/bin/node /fast/work/llm-fight-club-20260829/speech/speech-router.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

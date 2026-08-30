@@ -1,0 +1,7 @@
+.data/
+.run/
+.data-v2/
+.run-v2/
+.venv-natural-tts/
+__pycache__/
+node_modules/

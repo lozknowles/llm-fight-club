@@ -1,0 +1,16 @@
+[Unit]
+Description=Spoken AI Studio conversation application
+After=network-online.target llm-fight-club-speech-router.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-20260829
+EnvironmentFile=/fast/work/llm-fight-club-20260829/.run-v2/service.env
+ExecStart=/usr/bin/node /fast/work/llm-fight-club-20260829/server-spoken.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

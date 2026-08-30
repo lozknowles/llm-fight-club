@@ -1,0 +1,14 @@
+[Unit]
+Description=Spoken AI Studio Qwen3 natural speech provider
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-20260829
+ExecStart=/fast/work/llm-fight-club-20260829/.venv-natural-tts/bin/python /fast/work/llm-fight-club-20260829/speech/natural_tts_service.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

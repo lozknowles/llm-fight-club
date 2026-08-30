@@ -1,0 +1,16 @@
+[Unit]
+Description=Spoken AI Studio Flite fallback provider
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-20260829
+Environment=FLITE_HOST=127.0.0.1
+Environment=FLITE_PORT=18774
+ExecStart=/usr/bin/node /fast/work/llm-fight-club-20260829/flite-service.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
