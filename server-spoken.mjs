@@ -92,7 +92,7 @@ async function proxySpeech(request, response, pathname) {
     'content-type': upstream.headers.get('content-type') || 'application/octet-stream',
     'cache-control': 'no-store',
   };
-  for (const name of ['x-tts-provider', 'x-tts-model', 'x-tts-voice', 'x-tts-profile', 'x-tts-first-byte-ms', 'x-tts-latency-ms', 'x-tts-load-ms', 'x-tts-generation-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-vram-mib', 'x-tts-peak-vram-mb', 'x-tts-fallback', 'x-tts-attempts', 'x-audio-format']) {
+  for (const name of ['x-tts-provider', 'x-tts-model', 'x-tts-voice', 'x-tts-profile', 'x-tts-first-byte-ms', 'x-tts-latency-ms', 'x-tts-load-ms', 'x-tts-generation-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-vram-mib', 'x-tts-peak-vram-mb', 'x-tts-ram-mb', 'x-tts-fallback', 'x-tts-attempts', 'x-audio-format']) {
     const value = upstream.headers.get(name);
     if (value) headers[name] = value;
   }

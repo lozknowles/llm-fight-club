@@ -180,7 +180,7 @@ function audioHeaders(result) {
     'x-tts-attempts': encodeURIComponent(JSON.stringify(result.attempts)),
     'x-audio-format': result.provider.id === 'openai-gpt-4o-mini-tts' ? 'pcm_s16le_24000_mono' : 'container',
   };
-  for (const name of ['x-tts-load-ms', 'x-tts-generation-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-peak-vram-mb']) {
+  for (const name of ['x-tts-load-ms', 'x-tts-generation-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-peak-vram-mb', 'x-tts-ram-mb']) {
     const value = result.upstream.headers.get(name);
     if (value !== null) output[name] = value;
   }

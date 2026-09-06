@@ -33,6 +33,7 @@ _torch = None
 _np = None
 _loaded_ms = None
 _upstream_voice = None
+_upstream_startup_ms = 0
 
 
 def _load():
@@ -97,11 +98,13 @@ def _upstream(path, payload=None):
 
 
 def _proxy_synthesize(text, profile_id, speed):
-    global _upstream_voice
+    global _upstream_voice, _upstream_startup_ms
     if not UPSTREAM_TOKEN:
         raise RuntimeError("OMNIVOICE_UPSTREAM_TOKEN is required in proxy mode")
     if _upstream_voice is None:
-        _upstream_voice = _upstream("/health")["voice"]
+        health = _upstream("/health")
+        _upstream_voice = health["voice"]
+        _upstream_startup_ms = round(float(health.get("startupMs") or 0))
     began = time.perf_counter()
     result = _upstream("/synthesize", {"text": text, "voice": _upstream_voice, "format": "wav"})
     source = base64.b64decode(result["audio"], validate=True)
@@ -121,11 +124,12 @@ def _proxy_synthesize(text, profile_id, speed):
     upstream_metrics = result.get("metrics") or {}
     return audio, {
         "x-tts-model": str(upstream_metrics.get("model", MODEL_ID)),
-        "x-tts-load-ms": "0",
+        "x-tts-load-ms": str(_upstream_startup_ms),
         "x-tts-generation-ms": str(round(upstream_metrics.get("elapsedMs", elapsed))),
         "x-tts-audio-duration-ms": str(duration_ms),
         "x-tts-rtf": f"{float(upstream_metrics.get('elapsedMs', elapsed)) / max(1, duration_ms):.4f}",
         "x-tts-peak-vram-mb": str(round(float(upstream_metrics.get("peakAllocatedBytes") or 0) / 1048576)),
+        "x-tts-ram-mb": str(round(float(upstream_metrics.get("memoryBytes") or 0) / 1048576)),
         "x-tts-upstream": "existing-worker",
     }
 

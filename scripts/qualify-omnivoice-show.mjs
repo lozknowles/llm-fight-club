@@ -27,6 +27,15 @@ const voices = [
   { id: 'omnivoice-challenger', name: 'OmniVoice — Elara', provider: 'omnivoice' },
   { id: 'omnivoice-analyst', name: 'OmniVoice — Bram', provider: 'omnivoice' },
 ];
+const previews = [];
+for (const voice of voices) {
+  const response = await fetch(`${appBase}/tts/synthesize`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: "Hello. This is how I'll sound during the conversation.", voice: voice.id, speechRate: 1, profile: 'OMNIVOICE' }) });
+  if (!response.ok) throw Error(`Preview ${response.status}: ${await response.text()}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const file = path.join(outputDir, `preview-${voice.id}.wav`);
+  await writeFile(file, bytes);
+  previews.push({ voice: voice.id, file, audioMs: durationMs(bytes), provider: response.headers.get('x-tts-provider') });
+}
 let conversation = await post(`${appBase}/api/conversations`, {
   format: 'PANEL', premise: 'Should artificial intelligence make important decisions without human oversight?', style: 'SERIOUS', turnLimit: 6, turnLength: 38,
   speechMode: 'server', outputMode: 'TEXT_AND_VOICE', conversationHeat: 'BALANCED',
@@ -43,11 +52,18 @@ while (conversation.state !== 'COMPLETED') {
   const audioMs = durationMs(bytes);
   const file = path.join(outputDir, `${String(next.turn.turn_index + 1).padStart(2, '0')}-${next.turn.voice}.wav`);
   await writeFile(file, bytes);
-  const metrics = { provider: response.headers.get('x-tts-provider'), model: response.headers.get('x-tts-model'), firstByteMs: Number(response.headers.get('x-tts-first-byte-ms')), synthesisMs: Number(response.headers.get('x-tts-generation-ms')), audioMs, rtf: Number(response.headers.get('x-tts-rtf')), peakVramMb: Number(response.headers.get('x-tts-peak-vram-mb')), wallMs: Math.round(performance.now() - began) };
+  const metrics = { provider: response.headers.get('x-tts-provider'), model: response.headers.get('x-tts-model'), modelLoadMs: Number(response.headers.get('x-tts-load-ms')), firstByteMs: Number(response.headers.get('x-tts-first-byte-ms')), synthesisMs: Number(response.headers.get('x-tts-generation-ms')), audioMs, rtf: Number(response.headers.get('x-tts-rtf')), peakVramMb: Number(response.headers.get('x-tts-peak-vram-mb')), ramMb: Number(response.headers.get('x-tts-ram-mb')), wallMs: Math.round(performance.now() - began) };
   conversation = await post(`${appBase}/api/conversations/${conversation.id}/complete-playback`, { durationMs: audioMs, skipped: false, ttsProvider: metrics.provider, ttsLatencyMs: metrics.wallMs, ttsMetrics: metrics });
   results.push({ turn: next.turn.turn_index + 1, speaker: next.turn.speaker, model: next.turn.model, voice: next.turn.voice, text: next.turn.text, llmMs: next.turn.generation_latency_ms, file, ...metrics });
 }
-const evidence = { status: new Set(results.map((item) => item.voice)).size === 3 && results.every((item) => item.provider === 'omnivoice') ? 'PASS' : 'FAIL', conversationId: conversation.id, premise: conversation.premise, results, transcript: conversation.transcript, archive: `${appBase}/api/conversations/${conversation.id}/conversation.mp3` };
+let textConversation = await post(`${appBase}/api/conversations`, { format: 'INTERVIEW', premise: 'Can a show continue when speech is unavailable?', style: 'SERIOUS', turnLimit: 2, outputMode: 'TEXT', participants: [
+  { id: 'text-a', name: profiles[0].name, role: 'interviewer', model: config.models[0], voice: voices[0].id, voiceProfile: voices[0], personality: profiles[0] },
+  { id: 'text-b', name: profiles[1].name, role: 'guest', model: config.models[0], voice: voices[1].id, voiceProfile: voices[1], personality: profiles[1] },
+] });
+while (textConversation.state !== 'COMPLETED') { const next = await post(`${appBase}/api/conversations/${textConversation.id}/next`, {}); textConversation = await post(`${appBase}/api/conversations/${textConversation.id}/complete-playback`, { durationMs: 0, skipped: true, ttsProvider: 'text-only' }); }
+const textFallback = { state: textConversation.state, turns: textConversation.transcript.length, audioFiles: textConversation.transcript.filter((turn) => turn.audio_file).length };
+const passed = new Set(results.map((item) => item.voice)).size === 3 && results.every((item) => item.provider === 'omnivoice') && previews.every((item) => item.provider === 'omnivoice') && textFallback.state === 'COMPLETED' && textFallback.audioFiles === 0;
+const evidence = { status: passed ? 'PASS' : 'FAIL', conversationId: conversation.id, premise: conversation.premise, previews, results, transcript: conversation.transcript, textFallback, archive: `${appBase}/api/conversations/${conversation.id}/conversation.mp3` };
 await writeFile(path.join(outputDir, 'qualification.json'), JSON.stringify(evidence, null, 2));
 console.log(JSON.stringify(evidence, null, 2));
 if (evidence.status !== 'PASS') process.exitCode = 1;

@@ -93,6 +93,7 @@ function responseMetrics(response, began) {
     synthesis_ms: Number(response.headers.get('x-tts-generation-ms')) || null,
     real_time_factor: Number(response.headers.get('x-tts-rtf')) || null,
     peak_vram_mb: Number(response.headers.get('x-tts-peak-vram-mb')) || null,
+    ram_mb: Number(response.headers.get('x-tts-ram-mb')) || null,
     inter_speaker_silence_ms: null,
   };
 }
