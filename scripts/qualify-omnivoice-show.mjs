@@ -6,7 +6,19 @@ const outputDir = path.resolve(process.env.QUALIFICATION_OUTPUT || '.run-v2/omni
 await mkdir(outputDir, { recursive: true });
 const requestJson = async (url, init = {}) => { const response = await fetch(url, init); const value = await response.json(); if (!response.ok) throw Error(`${response.status}: ${value.error}`); return value; };
 const post = (url, value) => requestJson(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(value) });
-const durationMs = (bytes) => { const marker = bytes.indexOf(Buffer.from('data')); return Math.round(bytes.readUInt32LE(marker + 4) / bytes.readUInt32LE(28) * 1000); };
+const durationMs = (bytes) => {
+  if (bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE') throw Error('Invalid WAV');
+  let offset = 12;
+  let byteRate = null;
+  while (offset + 8 <= bytes.length) {
+    const id = bytes.toString('ascii', offset, offset + 4);
+    const size = bytes.readUInt32LE(offset + 4);
+    if (id === 'fmt ' && size >= 16) byteRate = bytes.readUInt32LE(offset + 16);
+    if (id === 'data' && byteRate) return Math.round((size === 0xffffffff ? bytes.length - offset - 8 : size) / byteRate * 1000);
+    offset += 8 + size + (size % 2);
+  }
+  throw Error('WAV data chunk missing');
+};
 
 const config = await requestJson(`${appBase}/api/config`);
 const profiles = ['mara-vale', 'cedric-pump', 'nina-quark'].map((id) => config.personalities.find((item) => item.id === id));

@@ -69,6 +69,22 @@ def _wav(audio, sample_rate=24000):
     return output.getvalue(), len(audio) / sample_rate
 
 
+def _finalize_streamed_wav(value):
+    """Replace FFmpeg pipe sentinel sizes with the actual finite WAV sizes."""
+    audio = bytearray(value)
+    offset = 12
+    while offset + 8 <= len(audio):
+        chunk_id = bytes(audio[offset:offset + 4])
+        size = int.from_bytes(audio[offset + 4:offset + 8], "little")
+        if chunk_id == b"data":
+            data_size = len(audio) - offset - 8
+            audio[4:8] = (len(audio) - 8).to_bytes(4, "little")
+            audio[offset + 4:offset + 8] = data_size.to_bytes(4, "little")
+            return bytes(audio)
+        offset += 8 + size + (size % 2)
+    raise RuntimeError("FFmpeg returned WAV without a data chunk")
+
+
 def _upstream(path, payload=None):
     headers = {"authorization": f"Bearer {UPSTREAM_TOKEN}"}
     data = None
@@ -98,6 +114,7 @@ def _proxy_synthesize(text, profile_id, speed):
         "-af", f"asetrate=24000*{factor},aresample=24000,atempo={tempo}",
         "-ac", "1", "-ar", "24000", "-f", "wav", "pipe:1",
     ], input=source, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=60).stdout
+    audio = _finalize_streamed_wav(audio)
     elapsed = round((time.perf_counter() - began) * 1000)
     with wave.open(io.BytesIO(audio), "rb") as value:
         duration_ms = round(value.getnframes() / value.getframerate() * 1000)
