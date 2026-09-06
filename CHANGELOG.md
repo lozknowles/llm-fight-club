@@ -9,6 +9,7 @@
 - Added load, synthesis, duration, real-time-factor and peak-VRAM telemetry.
 - Added a source-pinned isolated installer and service example; this change is not deployed.
 - Documented the checkpoint's non-commercial licensing constraint and pending P5000 qualification.
+- Physically qualified a six-turn, three-identity P5000 show, three previews, final MP3, resource telemetry, text-only mode and Flite outage fallback through the existing operator-authorized worker.
 
 ## 2026-08-30 — Live Conversation Heat
 

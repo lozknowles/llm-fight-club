@@ -138,6 +138,7 @@ async function eligibleProviders(profile, voice) {
 }
 async function openFirstAudio(payload) {
   const profile = String(payload.profile || process.env.SPEECH_DEFAULT_PROFILE || 'LIVE_FAST').toUpperCase();
+  const preferredProvider = ROUTING_PROFILES[profile]?.map((id) => providers.get(id)).find((provider) => provider?.supports(payload.voice));
   const candidates = await eligibleProviders(profile, payload.voice);
   if (!candidates.length) throw new Error(`No qualified provider for ${profile}/${payload.voice}`);
   const attempts = [];
@@ -159,7 +160,7 @@ async function openFirstAudio(payload) {
       if (first.done || !first.value?.byteLength) throw new Error('Provider returned an empty audio stream');
       const firstByteMs = Math.round(performance.now() - requestStarted);
       attempts.push({ provider: provider.id, outcome: 'selected', latencyMs: Math.round(performance.now() - providerStarted) });
-      return { profile, provider, upstream, reader, first: first.value, firstByteMs, attempts };
+      return { profile, provider, upstream, reader, first: first.value, firstByteMs, attempts, fallback: Boolean(preferredProvider && preferredProvider.id !== provider.id) };
     } catch (error) {
       if (reader) await reader.cancel(error.message).catch(() => {});
       attempts.push({ provider: provider.id, outcome: 'failed', latencyMs: Math.round(performance.now() - providerStarted), error: error.message.slice(0, 160) });
@@ -176,7 +177,7 @@ function audioHeaders(result) {
     'x-tts-voice': result.provider.resolveVoice(result.payloadVoice || ''),
     'x-tts-profile': result.profile,
     'x-tts-first-byte-ms': String(result.firstByteMs),
-    'x-tts-fallback': String(result.attempts.some((item) => item.outcome !== 'selected')),
+    'x-tts-fallback': String(result.fallback || result.attempts.some((item) => item.outcome !== 'selected')),
     'x-tts-attempts': encodeURIComponent(JSON.stringify(result.attempts)),
     'x-audio-format': result.provider.id === 'openai-gpt-4o-mini-tts' ? 'pcm_s16le_24000_mono' : 'container',
   };
