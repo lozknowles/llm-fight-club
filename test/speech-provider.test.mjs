@@ -4,6 +4,8 @@ import { SpeechProvider, readStreamChunkWithTimeout } from '../speech/providers/
 import { HttpSpeechProvider } from '../speech/providers/http-speech-provider.mjs';
 import { OpenAISpeechProvider } from '../speech/providers/openai-speech-provider.mjs';
 import { ElevenLabsSpeechProvider } from '../speech/providers/elevenlabs-speech-provider.mjs';
+import { OmniVoiceSpeechProvider } from '../speech/providers/omnivoice-speech-provider.mjs';
+import { OMNIVOICE_PROFILES, normalizeVoiceProfile } from '../speech/voice-profiles.mjs';
 
 test('SpeechProvider is provider-neutral and enforces implementation', () => {
   assert.throws(() => new SpeechProvider({ id: 'bad', voices: [] }), /abstract/);
@@ -134,4 +136,34 @@ test('speech stream reads fail closed when a provider stops producing bytes', as
     readStreamChunkWithTimeout(reader, 5, 'Test provider'),
     /Test provider timed out after 5 ms/,
   );
+});
+
+test('OmniVoice profiles are distinct original synthetic identities', () => {
+  assert.equal(new Set(OMNIVOICE_PROFILES.map((profile) => profile.id)).size, 3);
+  assert.equal(new Set(OMNIVOICE_PROFILES.map((profile) => profile.generationSettings.seed)).size, 3);
+  for (const profile of OMNIVOICE_PROFILES) {
+    assert.equal(normalizeVoiceProfile(profile).provenance.realPersonReference, false);
+    assert.equal(profile.providerVoiceData.mode, 'design');
+  }
+  assert.throws(() => normalizeVoiceProfile({ ...OMNIVOICE_PROFILES[0], provenance: { realPersonReference: true } }), /not permitted/);
+});
+
+test('OmniVoice adapter sends only the selected allow-listed profile', async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return new Response(new Uint8Array([82, 73, 70, 70]), { status: 200, headers: { 'content-type': 'audio/wav' } });
+  };
+  try {
+    const provider = new OmniVoiceSpeechProvider({ baseUrl: 'http://127.0.0.1:18776' });
+    const response = await provider.synthesizeStream({ text: 'That conclusion does not follow.', voice: 'omnivoice-challenger', speechRate: 1.1 });
+    assert.equal(response.ok, true);
+    assert.equal(request.url, 'http://127.0.0.1:18776/synthesize');
+    assert.equal(request.body.voiceProfile.id, 'omnivoice-challenger');
+    assert.equal(request.body.voiceProfile.providerVoiceData.mode, 'design');
+    assert.equal(request.body.voiceProfile.generationSettings.seed, 28703);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

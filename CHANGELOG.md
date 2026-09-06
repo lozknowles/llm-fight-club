@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-06 — Optional OmniVoice provider
+
+- Added a provider-neutral OmniVoice adapter and persistent loopback synthesis service.
+- Added Rowan, Elara and Bram as original deterministic designed profiles with explicit provenance and no real-person reference.
+- Preserved OpenAI, ElevenLabs, Qwen, classic and Flite fallbacks.
+- Added Text, Voice and Text + voice modes while retaining canonical transcripts.
+- Added load, synthesis, duration, real-time-factor and peak-VRAM telemetry.
+- Added a source-pinned isolated installer and service example; this change is not deployed.
+- Documented the checkpoint's non-commercial licensing constraint and pending P5000 qualification.
+
 ## 2026-08-30 — Live Conversation Heat
 
 - Added a sticky live `Docile` → `Furious` Conversation Heat control above the programme.

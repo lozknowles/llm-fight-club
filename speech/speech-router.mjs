@@ -3,8 +3,10 @@ import { performance } from 'node:perf_hooks';
 import { HttpSpeechProvider } from './providers/http-speech-provider.mjs';
 import { OpenAISpeechProvider } from './providers/openai-speech-provider.mjs';
 import { ElevenLabsSpeechProvider } from './providers/elevenlabs-speech-provider.mjs';
+import { OmniVoiceSpeechProvider } from './providers/omnivoice-speech-provider.mjs';
 import { readStreamChunkWithTimeout } from './providers/speech-provider.mjs';
 import { CLASSIC_VOICES, CLASSIC_VOICE_IDS } from './classic-voices.mjs';
+import { OMNIVOICE_PROFILES, publicVoiceProfile } from './voice-profiles.mjs';
 
 const host = process.env.SPEECH_ROUTER_HOST || '127.0.0.1';
 const port = Number(process.env.SPEECH_ROUTER_PORT || 18772);
@@ -12,8 +14,9 @@ const allowedOrigin = process.env.SPEECH_ALLOWED_ORIGIN || 'http://127.0.0.1:187
 const identities = ['live-interviewer', 'live-guest', 'live-host'];
 const elevenVoices = ['eleven-interviewer', 'eleven-guest', 'eleven-host'];
 const naturalVoices = ['natural-interviewer', 'natural-guest', 'natural-referee'];
+const omniVoices = OMNIVOICE_PROFILES.map((profile) => profile.id);
 const fallbackVoices = ['awb', 'kal', 'kal16', 'rms', 'slt'];
-const allVoices = [...identities, ...elevenVoices, ...naturalVoices, ...CLASSIC_VOICE_IDS, ...fallbackVoices];
+const allVoices = [...identities, ...elevenVoices, ...naturalVoices, ...omniVoices, ...CLASSIC_VOICE_IDS, ...fallbackVoices];
 const voiceLabels = {
   'live-interviewer': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Cedar interviewer',
   'live-guest': 'LIVE_FAST: OpenAI GPT-4o Mini TTS — Marin guest',
@@ -24,6 +27,7 @@ const voiceLabels = {
   'natural-interviewer': 'STUDIO: Qwen3-TTS 1.7B local — interviewer',
   'natural-guest': 'STUDIO: Qwen3-TTS 1.7B local — guest',
   'natural-referee': 'STUDIO: Qwen3-TTS 1.7B local — referee',
+  ...Object.fromEntries(OMNIVOICE_PROFILES.map((profile) => [profile.id, `OMNIVOICE: ${profile.name.replace(/^OmniVoice — /, '')}`])),
   awb: 'FALLBACK: Flite — AWB', kal: 'FALLBACK: Flite — Kal', kal16: 'FALLBACK: Flite — Kal 16 kHz',
   rms: 'FALLBACK: Flite — RMS', slt: 'FALLBACK: Flite — SLT',
   ...Object.fromEntries(CLASSIC_VOICES.map((voice) => [voice.id, voice.label])),
@@ -54,6 +58,7 @@ const natural = new HttpSpeechProvider({
     'eleven-host': 'natural-referee',
   },
 });
+const omnivoice = new OmniVoiceSpeechProvider({ baseUrl: process.env.OMNIVOICE_TTS_URL || 'http://127.0.0.1:18776' });
 const existing = new HttpSpeechProvider({
   id: 'ffmpeg-flite',
   voices: allVoices,
@@ -69,6 +74,9 @@ const existing = new HttpSpeechProvider({
     'natural-interviewer': 'awb',
     'natural-guest': 'slt',
     'natural-referee': 'rms',
+    'omnivoice-moderator': 'awb',
+    'omnivoice-challenger': 'slt',
+    'omnivoice-analyst': 'rms',
   },
 });
 const classic = new HttpSpeechProvider({
@@ -78,15 +86,16 @@ const classic = new HttpSpeechProvider({
   capabilities: ['speech.local', 'speech.test'],
 });
 
-const providers = new Map([openai, elevenlabs, natural, classic, existing].map((provider) => [provider.id, provider]));
+const providers = new Map([openai, elevenlabs, natural, omnivoice, classic, existing].map((provider) => [provider.id, provider]));
 const unavailableUntil = new Map();
 const firstByteTimeoutMs = Number(process.env.SPEECH_FIRST_BYTE_TIMEOUT_MS || 30000);
 const streamIdleTimeoutMs = Number(process.env.SPEECH_STREAM_IDLE_TIMEOUT_MS || 30000);
 export const ROUTING_PROFILES = {
-  LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-v3', 'classic-local-tts', 'ffmpeg-flite'],
-  LIVE_QUALITY: ['elevenlabs-v3', 'openai-gpt-4o-mini-tts', 'qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
-  STUDIO: ['qwen3-tts-voicedesign', 'elevenlabs-v3', 'openai-gpt-4o-mini-tts', 'classic-local-tts', 'ffmpeg-flite'],
-  OFFLINE: ['qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
+  LIVE_FAST: ['openai-gpt-4o-mini-tts', 'elevenlabs-v3', 'omnivoice', 'classic-local-tts', 'ffmpeg-flite'],
+  LIVE_QUALITY: ['elevenlabs-v3', 'openai-gpt-4o-mini-tts', 'omnivoice', 'qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
+  STUDIO: ['omnivoice', 'qwen3-tts-voicedesign', 'elevenlabs-v3', 'openai-gpt-4o-mini-tts', 'classic-local-tts', 'ffmpeg-flite'],
+  OMNIVOICE: ['omnivoice', 'qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
+  OFFLINE: ['omnivoice', 'qwen3-tts-voicedesign', 'classic-local-tts', 'ffmpeg-flite'],
 };
 
 const headers = (type = 'application/json') => ({
@@ -160,7 +169,7 @@ async function openFirstAudio(payload) {
   throw new Error(`All speech providers failed: ${attempts.map((item) => `${item.provider}=${item.error}`).join('; ')}`);
 }
 function audioHeaders(result) {
-  return {
+  const output = {
     ...headers(result.upstream.headers.get('content-type') || 'application/octet-stream'),
     'x-tts-provider': result.provider.id,
     'x-tts-model': result.upstream.headers.get('x-tts-model') || result.provider.model || result.provider.id,
@@ -171,6 +180,11 @@ function audioHeaders(result) {
     'x-tts-attempts': encodeURIComponent(JSON.stringify(result.attempts)),
     'x-audio-format': result.provider.id === 'openai-gpt-4o-mini-tts' ? 'pcm_s16le_24000_mono' : 'container',
   };
+  for (const name of ['x-tts-load-ms', 'x-tts-generation-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-peak-vram-mb']) {
+    const value = result.upstream.headers.get(name);
+    if (value !== null) output[name] = value;
+  }
+  return output;
 }
 async function streamAudio(response, result) {
   response.writeHead(200, audioHeaders(result));
@@ -215,7 +229,7 @@ const server = http.createServer(async (request, response) => {
       });
     }
     if (request.method === 'GET' && url.pathname === '/voices') {
-      return send(response, 200, { voices: allVoices, voiceOptions, identities, profiles: Object.keys(ROUTING_PROFILES) });
+      return send(response, 200, { voices: allVoices, voiceOptions, voiceProfiles: OMNIVOICE_PROFILES.map(publicVoiceProfile), identities, profiles: Object.keys(ROUTING_PROFILES) });
     }
     if (request.method === 'POST' && ['/synthesize', '/stream'].includes(url.pathname)) {
       const payload = await body(request);

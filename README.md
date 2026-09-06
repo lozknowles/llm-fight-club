@@ -16,6 +16,14 @@ The intended experience is asynchronous generation followed by real-time listeni
 
 The built-in natural performers are original synthetic characters. The application does not clone or imitate real people.
 
+## OmniVoice evaluation backend
+
+OmniVoice is available as an optional provider with three original designed identities: Rowan (measured British moderator), Elara (energetic British challenger) and Bram (dry British analyst). Select them directly, or open `/audio.html?profile=OMNIVOICE` to make them the defaults. The output selector supports Text, Voice and Text + voice; the canonical transcript remains stored and exportable in every mode.
+
+Install the source-pinned, isolated runtime with `scripts/install-omnivoice.sh`, then adapt and enable `deploy/systemd/llm-fight-club-omnivoice.service`. The service is loopback-only, loads the model once and serializes GPU requests. OmniVoice source code is Apache-2.0, but the published pretrained checkpoint is CC-BY-NC because of its training data. Treat it as evaluation-only until the intended release has passed a licensing review.
+
+On a GPU already hosting the authenticated OmniVoice worker, set `OMNIVOICE_UPSTREAM_URL` and `OMNIVOICE_UPSTREAM_TOKEN` only in the private service environment. The adapter reuses that worker's designed synthetic performer and applies fixed local pitch/rate treatments to expose three stable, distinguishable programme identities without loading the checkpoint twice. The token is never served to the browser or committed.
+
 ## Live Conversation Heat
 
 The sticky `Conversation Heat` control remains available above the show and can be changed while a conversation is running. `Docile`, `Calm`, `Balanced`, `Heated` and `Furious` jointly control dialogue direction, expressive TTS hints and the autonomous-listener threshold. Heated speakers seek a concrete counter-position and state it directly; Furious speakers may use varied natural exasperation, selective emphasis and earlier contextual barge-in. The prompts explicitly prohibit empty shouting, abuse, fabricated disagreement and repetitive catchphrases. A private debate-position evaluator retries any heated draft that reverses or muddles its assigned side.

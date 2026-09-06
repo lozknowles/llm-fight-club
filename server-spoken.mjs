@@ -469,6 +469,7 @@ async function generate(conversation) {
       ...heat.deliveryHints,
     ].filter(Boolean),
     speech_rate: participant.speechRate,
+    voice_profile: participant.voiceProfile || null,
     conversation_heat: conversation.conversationHeat,
     tts_provider: conversation.speechMode === 'server' ? 'pending-server-speech' : 'browser-speech-synthesis',
     tts_generation_latency_ms: 0,

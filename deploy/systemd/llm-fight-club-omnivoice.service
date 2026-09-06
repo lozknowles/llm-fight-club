@@ -1,0 +1,19 @@
+[Unit]
+Description=LLM Fight Club OmniVoice local TTS
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/fast/work/llm-fight-club-omnivoice
+Environment=OMNIVOICE_HOST=127.0.0.1
+Environment=OMNIVOICE_PORT=18776
+Environment=OMNIVOICE_DEVICE=cuda:0
+Environment=OMNIVOICE_MODEL=k2-fsa/OmniVoice
+# To reuse an existing authenticated worker instead of loading another model,
+# set OMNIVOICE_UPSTREAM_URL and OMNIVOICE_UPSTREAM_TOKEN in a private EnvironmentFile.
+ExecStart=/fast/work/omnivoice-runtime/venv/bin/python speech/omnivoice_service.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -14,6 +14,7 @@ let config;
 let conversation;
 let voices = [];
 let voiceOptions = [];
+let voiceProfiles = [];
 let audioUrl = null;
 let startedAt = 0;
 let settled = false;
@@ -88,6 +89,10 @@ function responseMetrics(response, began) {
     first_playable_ms: null,
     stream_complete_ms: null,
     audio_duration_ms: null,
+    model_load_ms: Number(response.headers.get('x-tts-load-ms')) || null,
+    synthesis_ms: Number(response.headers.get('x-tts-generation-ms')) || null,
+    real_time_factor: Number(response.headers.get('x-tts-rtf')) || null,
+    peak_vram_mb: Number(response.headers.get('x-tts-peak-vram-mb')) || null,
     inter_speaker_silence_ms: null,
   };
 }
@@ -376,7 +381,9 @@ function fill() {
   if (config.models[1]) $$('.model')[1].value = config.models[1];
   const premiumDefaults = ['eleven-interviewer', 'eleven-guest', 'eleven-host'];
   const liveDefaults = ['live-interviewer', 'live-guest', 'live-host'];
-  const defaults = liveDefaults.every((id) => voices.includes(id)) ? liveDefaults : premiumDefaults;
+  const omniDefaults = ['omnivoice-moderator', 'omnivoice-challenger', 'omnivoice-analyst'];
+  const defaults = speechProfile.toUpperCase() === 'OMNIVOICE' && omniDefaults.every((id) => voices.includes(id))
+    ? omniDefaults : liveDefaults.every((id) => voices.includes(id)) ? liveDefaults : premiumDefaults;
   $$('.voice').forEach((select, index) => { select.value = defaults[index] || voices[index]; });
   $$('.personality').forEach((select) => {
     const updateSummary = () => {
@@ -391,12 +398,14 @@ function fill() {
 function participant(card) {
   const personality = config.personalities.find((profile) => profile.id === card.querySelector('.personality').value);
   const customPrompt = card.querySelector('.personality-prompt').value.trim();
+  const voice = card.querySelector('.voice').value;
   return {
     id: crypto.randomUUID(),
     name: personality.name,
     role: card.dataset.role,
     model: card.querySelector('.model').value,
-    voice: card.querySelector('.voice').value,
+    voice,
+    voiceProfile: voiceProfiles.find((profile) => profile.id === voice) || null,
     speechRate: Number(card.querySelector('.speech-rate').value),
     personality: { ...personality, customPrompt },
   };
@@ -424,7 +433,7 @@ function render() {
     const interruption = turn.programme_introduction ? ' · programme introduction' : turn.interrupted ? ` · interrupted by ${escapeHtml(turn.interrupted_by_name || 'listener')}` : turn.autonomous_interruption ? ' · autonomous interruption' : turn.interruption_reaction ? ' · interruption response' : '';
     return `<article class="turn ${speaking}" style="--accent:${['#63d2ff', '#ff6b9a', '#ffd166'][participantIndex % 3]}">
       <b>${escapeHtml(turn.speaker)}</b> <span class="meta">${escapeHtml(turn.role)} · ${escapeHtml(turn.model)} · voice ${escapeHtml(turn.voice)} · voice speed ${turn.speech_rate || 1}×</span>
-      <p>${escapeHtml(turn.text)}</p>
+      <p>${conversation.outputMode === 'VOICE' ? '<i>Transcript retained in exports.</i>' : escapeHtml(turn.text)}</p>
       <span class="meta">LLM ${turn.generation_latency_ms} ms · playback ${turn.audio_duration_ms ?? 'in progress'} ms${interruption}${live}${audio}</span>
     </article>`;
   }).join('');
@@ -514,7 +523,13 @@ async function next() {
     metrics = {};
     $('#error').textContent = '';
     render();
-    await play(result.turn);
+    if (conversation.outputMode === 'TEXT') {
+      settled = false;
+      startedAt = performance.now();
+      metrics = { provider: 'text-only', audio_duration_ms: 0, first_playable_ms: 0 };
+      await finish(true);
+    }
+    else await play(result.turn);
   } catch (error) {
     $('#error').textContent = error.message;
     $('#status').textContent = `${conversation.format} · RESPONSE ERROR · retry is available`;
@@ -535,7 +550,8 @@ $('#setup').onsubmit = async (event) => {
       style: $('#style').value,
       turnLimit: Number($('#turnLimit').value),
       turnLength: 55,
-      speechMode: 'server-streaming',
+      speechMode: 'server',
+      outputMode: $('#outputMode').value,
       speechProfile,
       conversationHeat: selectedHeat(),
       interruptionAudio: $('#interruptionAudio').value,
@@ -675,5 +691,6 @@ renderHeat();
 const voiceResponse = await fetch(`${ttsBase}/voices`).then((response) => response.json());
 voices = voiceResponse.voices;
 voiceOptions = voiceResponse.voiceOptions || voices.map((id) => ({ id, label: id }));
+voiceProfiles = voiceResponse.voiceProfiles || [];
 configure();
 fill();

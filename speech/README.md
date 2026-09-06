@@ -7,6 +7,7 @@ ConversationEngine
   -> persistent browser audio element
      -> SpeechRouter
         -> NaturalTTSProvider (Qwen3-TTS VoiceDesign)
+        -> OmniVoiceSpeechProvider (original designed VoiceProfiles)
         -> ExistingTTSProvider (FFmpeg/Flite fallback)
 ```
 
@@ -21,6 +22,8 @@ Natural voice identities are fixed application identifiers:
 - `natural-referee`: original British female host/referee.
 
 None is intended to imitate a real person. Delivery hints are sent separately and appended to the identity instruction only for the current line.
+
+Optional OmniVoice identities are `omnivoice-moderator` (Rowan), `omnivoice-challenger` (Elara) and `omnivoice-analyst` (Bram). Their design instructions and fixed seeds live in `voice-profiles.mjs`; the browser receives only public provenance metadata. The loopback service runs on port 18776 and returns WAV plus resource telemetry. It remains evaluation-only pending P5000 qualification and a licensing decision because the published checkpoint is CC-BY-NC.
 
 The fallback catalog (`awb`, `kal`, `kal16`, `rms`, `slt`) remains available. If the natural backend fails, the router maps natural interviewer/guest/referee to `awb`/`slt`/`rms`, returns a valid WAV and marks `x-tts-fallback: true`.
 
