@@ -90,7 +90,16 @@ Only accepted profiles can receive ANNOUNCER and COMMENTATOR. Neither role is an
 
 The Voice Lab bout runner uses the existing conversation API for a real single-round, two-competitor debate, announces competitors and round, plays model arguments through existing distinct built-in voices, and requests a schema-validated LLM judgement of the completed transcript. It announces scores and either a winner or tie. Judge failure must not invent a winner. Results are clearly labelled LLM opinion; the first competitor's configured model is also used in a separate judge call, so this is not an independent-model benchmark.
 
-This runner is the initial permitted-role integration; it does not yet add cloned voices to every ordinary conversation-format dropdown. Cloned profiles deliberately do not appear in debater/guest/authority voice lists.
+The runner retains its announcement/commentary-only demonstration. Since 1.1,
+an accepted profile can separately opt into ordinary conversation-format voice
+dropdowns using **Available in Fight Club**. This defaults false and requires an
+authenticated explicit boolean update; it does not change Agent Control authority.
+The protected deployment must set `VOICE_LAB_FIGHT_CLUB_ENABLED=1`. Only opted-in,
+accepted IDs and labels enter the catalogue. Every new synthesis rechecks both
+conditions; unchecking or resetting prevents further use. Existing generated
+conversation WAV/MP3 files remain in the conversation archive. This permission
+allows private Studio users to generate fictional participant dialogue in the
+synthetic voice, not to claim endorsement by the real person.
 
 Synthesis is serialized on the shared existing worker. No cancellation of already-started GPU inference or streaming conditioning is implemented. Stop stops playback and the bout, prevents subsequent announcements/results, and may wait for an in-flight request to finish. Naturalness and latency require real measurement, not mock assertions.
 

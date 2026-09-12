@@ -36,6 +36,11 @@ function render() {
   $('profiles').disabled = busy || recording || Boolean(take); $('newProfile').disabled = busy || recording || Boolean(take);
   if (!profile) { $('bout').hidden = true; return; }
   const state = profile.qualification_status;
+  $('fightClubEnabled').checked = profile.fight_club_enabled === true;
+  $('fightClubEnabled').disabled = busy || recording || Boolean(take) || state !== 'ACCEPTED' || !profile.user_acceptance;
+  $('fightClubStatus').textContent = state !== 'ACCEPTED' ? 'Accept this voice first to make it available in Fight Club.' : profile.fight_club_enabled
+    ? `Saved: available as RECORDED: ${profile.display_name} — OmniVoice (synthetic). Reload Fight Club to refresh its voice dropdowns.`
+    : 'Saved: not available in Fight Club. Check the box to enable it.';
   $('profileTitle').textContent = `${profile.display_name} — Voice profile`;
   $('profileState').textContent = `${state} · ${profile.profile_id} · ${profile.user_acceptance ? 'Explicitly accepted by the operator' : 'NOT accepted for use'}`;
   $('recordPanel').hidden = state !== 'RECORDING';
@@ -84,7 +89,7 @@ function render() {
 function resetTake() { take = null; quality = null; chunks = []; takeError = ''; $('confirmedText').checked = false; $('quality').textContent = ''; render(); }
 async function refreshProfiles() {
   profiles = await api('/profiles'); $('profiles').replaceChildren(new Option('Create a new profile', ''));
-  for (const p of profiles) $('profiles').add(new Option(`${p.display_name} · ${p.qualification_status}`, p.profile_id));
+  for (const p of profiles) $('profiles').add(new Option(`${p.display_name} · ${p.qualification_status}${p.fight_club_enabled && p.user_acceptance ? ' · ✓ Fight Club' : ''}`, p.profile_id));
   $('profiles').value = profile?.profile_id || '';
 }
 async function micOff() {
@@ -219,7 +224,11 @@ for (const [button, kind] of [['playOriginal', 'original'], ['playSynthetic', 's
     profile = await post('heard', { test_id: t.id, kind }); status(`${kind === 'original' ? 'Original' : 'Synthetic'} playback completed. Final likeness judgement belongs to you.`);
   }));
 });
-$('acceptVoice').onclick = () => action(async () => { profile = await post('accept', { accept: true, test_id: profile.tests.at(-1).id }); await refreshProfiles(); status('You accepted this voice. Choose its presentation roles below.'); });
+$('acceptVoice').onclick = () => action(async () => { profile = await post('accept', { accept: true, test_id: profile.tests.at(-1).id }); await refreshProfiles(); status('You accepted this voice. You can now enable Available in Fight Club, or choose presentation roles below.'); });
+$('fightClubEnabled').onchange = () => {
+  const enabled = $('fightClubEnabled').checked;
+  return action(async () => { profile = await post('fight-club', { enabled }); await refreshProfiles(); status(enabled ? 'Voice enabled for Fight Club. Reload Studio to refresh its voice menus.' : 'Voice removed from Fight Club; future generation is blocked. Saved conversation audio is unchanged.'); });
+};
 $('saveRoles').onclick = () => action(async () => { profile = await post('roles', { roles: [...($('announcer').checked ? ['ANNOUNCER'] : []), ...($('commentator').checked ? ['COMMENTATOR'] : [])], publication_disclosure: $('publicationDisclosure').checked }); status('Role assignment saved. No authority identity has changed.'); });
 for (const [button, route] of [['addSample', 'add-sample'], ['requalify', 'requalify'], ['reject', 'reject']]) $(button).onclick = () => action(async () => {
   if (take || (route === 'add-sample' && profile.qualification_status === 'RECORDING')) return;

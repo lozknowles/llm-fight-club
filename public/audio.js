@@ -375,7 +375,7 @@ function configure() {
 function fill() {
   for (const select of $$('.model')) select.innerHTML = config.models.map((model) => `<option>${model}</option>`).join('');
   for (const select of $$('.personality')) select.innerHTML = config.personalities.map((profile) => `<option value="${profile.id}">${profile.name}</option>`).join('');
-  for (const select of $$('.voice')) select.innerHTML = voiceOptions.map((voice) => `<option value="${voice.id}">${voice.label}</option>`).join('');
+  for (const select of $$('.voice')) select.replaceChildren(...voiceOptions.map(voice => new Option(voice.label, voice.id)));
   $$('.personality')[0].value = 'mara-vale';
   $$('.personality')[1].value = 'cedric-pump';
   $$('.personality')[2].value = 'nina-quark';

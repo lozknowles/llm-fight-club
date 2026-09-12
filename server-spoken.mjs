@@ -12,6 +12,9 @@ import {
 } from './lib/repetition-guard.mjs';
 import { assembleConversationMp3, conversationMp3Path, saveTurnAudio, turnAudioPath } from './lib/audio-archive.mjs';
 import { voiceLabRoutes } from './lib/voice-lab-http.mjs';
+import { VoiceLab } from './lib/voice-lab.mjs';
+import { OmniVoiceEnrolmentProvider } from './speech/providers/voice-lab-provider.mjs';
+import { EnrolledSpeechProvider } from './speech/providers/enrolled-speech-provider.mjs';
 import { validateBoutScore } from './lib/voice-lab-judge.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -25,7 +28,15 @@ const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:187
 const conversations = new Map();
 const prefetches = new Map();
 const judgeBusy = new Set();
+const voiceProfilesStore = new VoiceLab({
+  directory: process.env.VOICE_LAB_DATA_DIR || path.join(dataDir, 'voice-lab-private'),
+  provider: new OmniVoiceEnrolmentProvider({ baseUrl: process.env.VOICE_LAB_WORKER_URL, token: process.env.VOICE_LAB_WORKER_TOKEN }),
+});
+const enrolledSpeech = new EnrolledSpeechProvider({ lab: voiceProfilesStore,
+  enabled: process.env.VOICE_LAB_ENABLED === '1' && process.env.VOICE_LAB_FIGHT_CLUB_ENABLED === '1',
+});
 const voiceLab = voiceLabRoutes({
+  lab: voiceProfilesStore,
   directory: process.env.VOICE_LAB_DATA_DIR || path.join(dataDir, 'voice-lab-private'),
   enabled: process.env.VOICE_LAB_ENABLED === '1', key: process.env.VOICE_LAB_ACCESS_KEY,
   judge: async ({ conversation_id }) => {
@@ -106,11 +117,17 @@ async function body(request) {
 async function proxySpeech(request, response, pathname) {
   const target = new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`);
   const payload = request.method === 'POST' ? await body(request) : null;
-  const upstream = await fetch(target, {
+  const upstream = enrolledSpeech.supports(payload?.voice) ? await enrolledSpeech.response(payload) : await fetch(target, {
     method: request.method,
     headers: payload ? { 'content-type': 'application/json' } : undefined,
     body: payload ? JSON.stringify(payload) : undefined,
   });
+  if (pathname === '/tts/voices' && upstream.ok) {
+    const catalog = await upstream.json(), enrolled = await enrolledSpeech.voicesForMenu();
+    catalog.voiceOptions = [...enrolled, ...(catalog.voiceOptions || catalog.voices.map(id => ({ id, label: id })))];
+    catalog.voices = [...enrolled.map(v => v.id), ...catalog.voices];
+    return send(response, 200, catalog);
+  }
   const headers = {
     'content-type': upstream.headers.get('content-type') || 'application/octet-stream',
     'cache-control': 'no-store',

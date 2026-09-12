@@ -9,6 +9,8 @@ import { voiceLabRoutes } from '../lib/voice-lab-http.mjs';
 import { OmniVoiceEnrolmentProvider } from '../speech/providers/voice-lab-provider.mjs';
 import { consentReady, canRecord, canAcceptVoice } from '../public/voice-lab-state.js';
 import { validateBoutScore } from '../lib/voice-lab-judge.mjs';
+import { EnrolledSpeechProvider, changeTempo } from '../speech/providers/enrolled-speech-provider.mjs';
+import { saveTurnAudio } from '../lib/audio-archive.mjs';
 
 // Synthetic signal for regression ONLY. Not a recording or voice qualification.
 function wav(seconds = 4, amplitude = .2) {
@@ -213,4 +215,80 @@ test('bout judge validates scores and allows a tie without inventing a winner', 
   assert.equal(validateBoutScore({ score_a: 8, score_b: 8, reason: 'Balanced evidence' }).winner, 'TIE');
   assert.equal(validateBoutScore({ score_a: 8, score_b: 7, reason: 'Stronger evidence' }).winner, 'A');
   assert.throws(() => validateBoutScore({ score_a: 99, score_b: 7, reason: 'Invalid' }), /invalid/);
+});
+
+test('Fight Club availability is explicit, accepted-only, durable and minimal', async t => {
+  const { lab, fake, dir } = await fixture(t), p = await accepted(lab), id = p.profile_id;
+  assert.equal(p.fight_club_enabled, false); assert.deepEqual(await lab.fightClubVoices(), []);
+  await assert.rejects(lab.fightClubAvailability(id, 'true'), /true or false/);
+  const unaccepted = await built(lab);
+  await assert.rejects(lab.fightClubAvailability(unaccepted.profile_id, true), /Accept this voice/);
+  await lab.fightClubAvailability(id, true);
+  const restored = new VoiceLab({ directory: dir, provider: fake });
+  assert.deepEqual(await restored.fightClubVoices(), [{ id: `enrolled:${id}`, label: 'RECORDED: Synthetic fixture — OmniVoice (synthetic)' }]);
+  assert.equal((await restored.get(id)).fight_club_permission.enabled, true);
+  await lab.test(id, 'An additional preview does not revoke availability.');
+  assert.equal((await lab.fightClubVoices()).length, 1);
+  await lab.fightClubAvailability(id, false);
+  assert.deepEqual(await lab.fightClubVoices(), []);
+  await assert.rejects(lab.fightClubSpeech(id, 'Hello.'), /not enabled/);
+});
+
+test('enrolled provider fails closed, uses the saved reference and archives a WAV', async t => {
+  const { lab, dir } = await fixture(t), p = await accepted(lab), voice = `enrolled:${p.profile_id}`;
+  const disabled = new EnrolledSpeechProvider({ lab });
+  assert.deepEqual(await disabled.voicesForMenu(), []);
+  await assert.rejects(disabled.synthesize({ voice, text: 'Hello.' }), /disabled/);
+  const speech = new EnrolledSpeechProvider({ lab, enabled: true });
+  await assert.rejects(speech.synthesize({ voice, text: 'Hello.' }), /not enabled/);
+  await lab.fightClubAvailability(p.profile_id, true);
+  await assert.rejects(speech.synthesize({ voice: 'enrolled:../../private', text: 'Hello.' }), /Invalid/);
+  await assert.rejects(speech.synthesize({ voice, text: 'Hello.', speechRate: 99 }), /speed/);
+  const response = await speech.response({ voice, text: 'An original participant sentence.' });
+  assert.equal(response.headers.get('content-type'), 'audio/wav');
+  assert.equal(response.headers.get('x-tts-provider'), 'omnivoice-enrolled');
+  assert.equal(response.headers.get('x-tts-fallback'), 'false');
+  const bytes = Buffer.from(await response.arrayBuffer());
+  assert.equal(assessWav(bytes, { generated: true }).duration, 4);
+  const saved = await saveTurnAudio({ dataDir: dir, conversationId: 'fixture', turnId: 'turn', bytes, audioFormat: 'wav' });
+  assert.deepEqual(await fs.readFile(saved), bytes);
+  await lab.reset(p.profile_id, 'requalify');
+  assert.equal((await lab.get(p.profile_id)).fight_club_enabled, false);
+  assert.deepEqual(await speech.voicesForMenu(), []);
+  await assert.rejects(speech.synthesize({ voice, text: 'No longer allowed.' }), /not enabled/);
+});
+
+test('availability changes share the synthesis lock and deletion blocks future speech', async t => {
+  const { lab, fake } = await fixture(t), p = await accepted(lab); let release;
+  await lab.fightClubAvailability(p.profile_id, true);
+  fake.synthesize = () => new Promise(resolve => { release = () => resolve({ audio: wav(), version: 'fixture-v1' }); });
+  const pending = lab.fightClubSpeech(p.profile_id, 'A line in flight.');
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(lab.fightClubAvailability(p.profile_id, false), /busy/);
+  release(); await pending;
+  await lab.remove(p.profile_id);
+  await assert.rejects(lab.fightClubSpeech(p.profile_id, 'Deleted profile.'));
+  assert.deepEqual(await lab.fightClubVoices(), []);
+});
+
+test('availability HTTP write requires the separate key and same-site request', async t => {
+  const { lab } = await fixture(t), p = await accepted(lab), key = 'fixture-key-'.repeat(4);
+  const handler = voiceLabRoutes({ lab, enabled: true, key });
+  const server = http.createServer((req, res) => handler(req, res, new URL(req.url, 'http://localhost')));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const url = `http://127.0.0.1:${server.address().port}/api/voice-lab/profiles/${p.profile_id}/fight-club`;
+  const post = headers => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ enabled: true }) });
+  assert.equal((await post({})).status, 401);
+  assert.equal((await post({ 'x-voice-lab-key': key, 'sec-fetch-site': 'cross-site' })).status, 403);
+  assert.equal((await lab.get(p.profile_id)).fight_club_enabled, false);
+  assert.equal((await post({ 'x-voice-lab-key': key })).status, 200);
+  assert.equal((await lab.get(p.profile_id)).fight_club_enabled, true);
+});
+
+test('Linux release host FFmpeg preserves a canonical WAV and changes duration', { skip: process.platform !== 'linux' }, async () => {
+  const faster = assessWav(await changeTempo(wav(4), 1.25), { generated: true });
+  const slower = assessWav(await changeTempo(wav(4), .75), { generated: true });
+  assert.ok(faster.duration > 3 && faster.duration < 3.4);
+  assert.ok(slower.duration > 5 && slower.duration < 5.6);
 });

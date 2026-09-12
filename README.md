@@ -1,5 +1,21 @@
 # LLM Fight Club / Spoken AI Studio
 
+## Release 1.1.0 — recorded voices in Fight Club
+
+In Voice Lab, select an accepted profile and check **Available in Fight Club**.
+Reload Studio: it appears at the top of each voice menu as
+**RECORDED: name — OmniVoice (synthetic)**. Each profile defaults unchecked;
+accepting a voice alone does not authorise participant use. Uncheck to block new
+generation. Reopening, rejecting or re-qualifying also revokes availability.
+Existing exported conversation audio is retained. The voice is synthetic, not
+evidence that the person said or endorses a character's dialogue.
+
+Private deployments must explicitly set `VOICE_LAB_FIGHT_CLUB_ENABLED=1` alongside
+the existing Voice Lab configuration. This allows users of the MFA-protected
+Studio to use opted-in voices without the separate profile-management key.
+Never enable this on an anonymous/public Studio. Voice speed uses pitch-preserving
+FFmpeg tempo adjustment; expression remains dependent on the selected reference.
+
 ## Release 1.0.0 — protected internal deployment
 
 This release includes Voice Lab behind the existing Private Hub password/SMS gate,

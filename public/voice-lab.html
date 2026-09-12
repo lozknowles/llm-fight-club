@@ -3,7 +3,7 @@
 <title>Voice Lab — Spoken AI Studio</title>
 <link rel="stylesheet" href="voice-lab.css">
 <body><header><a href="audio.html">← Spoken AI Studio</a><h1>VOICE LAB</h1>
-<p class="muted">Spoken AI Studio 1.0.0 · private voice enrolment</p>
+<p class="muted">Spoken AI Studio 1.1.0 · private voice enrolment</p>
 <p>Your voice, with your permission. Record, compare, decide.</p>
 <p class="muted">Optional reference-audio conditioning — not model training. Synthetic speech is presentation, never proof of identity or authority.</p></header>
 <main>
@@ -18,7 +18,7 @@
 <section id="consent"><h2>VOICE CLONING CONSENT</h2>
 <p>This feature creates synthetic speech that can sound like the person whose voice is recorded.</p>
 <p>Only enrol your own voice, or a voice whose speaker has explicitly given permission to create and use a synthetic version. The resulting voice may say words the speaker never recorded. It must not be treated as evidence that the real person said, approved or authorised those words.</p>
-<p>Recordings and reusable profiles are sensitive personal material. They are stored privately for internal Fight Club announcement/commentary. You can delete them. They are not placed in public Git.</p>
+<p>Recordings and reusable profiles are sensitive personal material. They are stored privately for internal Fight Club announcement/commentary. After accepting a voice, you can separately allow any Fight Club participant to use it. You can delete profiles. They are not placed in public Git.</p>
 <label>Display name <input id="displayName" maxlength="60" placeholder="For example, Loz"></label>
 <label>Relationship <select id="relationship"><option value="">Choose…</option><option value="SELF">My own voice</option><option value="AUTHORISED_OTHER">Explicitly authorised by the speaker</option></select></label>
 <label class="check"><input id="permission" type="checkbox">I confirm that this is my voice OR I have explicit permission from the speaker to create and use this synthetic voice.</label>
@@ -26,6 +26,9 @@
 <label class="check"><input id="purpose" type="checkbox">I agree to create the voice profile for the purposes described here.</label>
 <button id="continue" disabled>Continue to guided recording</button></section>
 <section id="profilePanel" hidden><h2 id="profileTitle"></h2><p id="profileState"></p>
+<label class="check"><input type="checkbox" id="fightClubEnabled" disabled>Available in Fight Club — allow this synthetic voice for interviewers, guests, debaters, panellists and hosts.</label>
+<p id="fightClubStatus" class="muted" role="status"></p>
+<p class="muted">This permits users of the private Studio to generate new dialogue with this voice. It does not mean the recorded person said or endorses the words. Unchecking blocks future generation; existing conversation audio is retained.</p>
 <p class="muted">OmniVoice uses one accepted reference, selected deterministically nearest eight seconds. These varied readings explore delivery; they do not train model weights or guarantee every style in the generated voice.</p>
 <div id="recordPanel"><h3>Microphone setup</h3>
 <button id="enableMic">Enable microphone</button><button id="disableMic" disabled>Turn microphone off</button><label>Microphone <select id="microphones"><option value="">System default</option></select></label>

@@ -2,6 +2,26 @@
 
 ## Optional Voice Lab boundary
 
+Version 1.1 adds an explicit, separately authenticated `fight-club` availability
+update (strict boolean). Old/new profiles are unavailable by default. The private
+application must additionally enable `VOICE_LAB_FIGHT_CLUB_ENABLED=1`.
+`EnrolledSpeechProvider` merges only accepted + opted-in IDs/labels into the voice
+catalogue, and routes `enrolled:UUID` speech to the SAME VoiceLab instance used by
+management routes. Every synthesis rechecks acceptance, opt-in and representation
+integrity under the shared profile lock; concurrent changes return a retryable
+busy error. Unknown/revoked voices fail closed without changing voice identity.
+No recordings, prompts, keys or consent metadata are exposed by the catalogue.
+The application relies on the existing Private Hub MFA boundary for participant
+synthesis; profile management retains its additional key. A checkbox authorises
+that private application's users, not an anonymous public audience.
+
+Full WAV responses flow through the existing turn archive/MP3 path. Non-default
+voice speed uses an in-memory, bounded FFmpeg atempo transform. ConversationEngine
+is unchanged, and the installed worker is reused. This backend buffers each line;
+it does not claim streaming synthesis or support arbitrary emotional instructions.
+Reset clears opt-in; preview generation does not. Previously generated/exported
+conversation audio is not deleted by opt-out or profile deletion.
+
 The Voice Lab HTTP API authenticates every profile, audio and role request with
 a dedicated header credential. `VoiceLab` owns consent, private assets, revisioned
 qualification and role permissions. Its provider-neutral adapter contract supports

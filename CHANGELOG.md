@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 — 2026-09-12
+
+- Added saved-profile **Available in Fight Club** opt-in and clear recorded-voice labels at the top of participant voice menus.
+- Accepted, explicitly enabled voices use the existing OmniVoice worker through a provider-neutral adapter, with pitch-preserving voice speed and existing turn WAV / conversation MP3 storage.
+- Recheck acceptance/availability on every generation; reject stale IDs without falling back to someone else's voice. Reset revokes availability. Recorded names are rendered as text, not HTML.
+- Opt-in is off by default for all profiles and requires an additional private-deployment switch. Existing reference data, consent, acceptance and protected access are preserved.
+
 ## 1.0.0 — 2026-09-12
 
 - First versioned GitHub release combining the spoken conversation engine and consent-driven Voice Lab, including four guided recordings, explicit saving, custom-sentence synthesis and original/synthetic comparison.

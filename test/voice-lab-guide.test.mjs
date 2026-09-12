@@ -66,6 +66,21 @@ test('actual UI save handler waits for Ready, keeps consent manual, and never st
   assert.equal(get('generateTest').textContent, 'Generate voice');
   assert.equal(get('playSynthetic').disabled, false);
   assert.match(get('testText').textContent, /Read this particular sentence/);
+  assert.equal(get('fightClubEnabled').disabled, true);
+  vm.runInContext(`profile.qualification_status = 'ACCEPTED'; profile.user_acceptance = true; profile.approved_roles = [];
+    render(); refreshProfiles = async () => {};
+    api = async (route, method, value) => { globalThis.availabilityRequest = {route, value}; return {...profile, fight_club_enabled: value.enabled}; };
+    $('fightClubEnabled').checked = true;`, sandbox);
+  assert.equal(get('fightClubEnabled').disabled, false);
+  await vm.runInContext(`$('fightClubEnabled').onchange()`, sandbox);
+  assert.equal(sandbox.availabilityRequest.value.enabled, true);
+  assert.match(sandbox.availabilityRequest.route, /fight-club$/);
+  assert.equal(get('fightClubEnabled').checked, true);
+  assert.match(get('fightClubStatus').textContent, /Saved: available/);
+  vm.runInContext(`api = async () => { throw Error('Simulated save failure'); }; $('fightClubEnabled').checked = false;`, sandbox);
+  await vm.runInContext(`$('fightClubEnabled').onchange()`, sandbox);
+  assert.equal(get('fightClubEnabled').checked, true); // Restore persisted state on failure.
+  assert.match(get('status').textContent, /Simulated save failure/);
 });
 
 test('read-aloud text and controls are adjacent, with progress immediately beneath them', async () => {
