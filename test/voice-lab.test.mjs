@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import { VoiceLab, CONSENT_VERSION, PROMPTS, TEST_PHRASES, assessWav, DISCLOSURE } from '../lib/voice-lab.mjs';
+import { VoiceLab, CONSENT_VERSION, PROMPTS, LEGACY_PROMPTS, TEST_PHRASES, assessWav, DISCLOSURE } from '../lib/voice-lab.mjs';
 import { voiceLabRoutes } from '../lib/voice-lab-http.mjs';
 import { OmniVoiceEnrolmentProvider } from '../speech/providers/voice-lab-provider.mjs';
 import { consentReady, canRecord, canAcceptVoice } from '../public/voice-lab-state.js';
@@ -30,7 +30,7 @@ async function fixture(t) {
 }
 async function built(lab) {
   const p = await lab.create(consent);
-  for (let i = 0; i < 6; i++) await lab.sample(p.profile_id, i, wav(i === 2 ? 8 : 4), true);
+  for (let i = 0; i < PROMPTS.length; i++) await lab.sample(p.profile_id, i, wav(i === 2 ? 8 : 4), true);
   return lab.build(p.profile_id);
 }
 async function accepted(lab) {
@@ -66,17 +66,17 @@ test('quality rejects malformed, short, quiet, silent and clipping recordings', 
 test('create persists consent, deterministically selects reference, and does not accept a clone', async t => {
   const { lab, fake, dir } = await fixture(t), p = await built(lab);
   assert.equal(p.selected_sample, 2); assert.equal(p.qualification_status, 'UNQUALIFIED'); assert.equal(p.user_acceptance, false);
-  assert.equal(p.reference_audio_hashes.length, 6); assert.equal(p.voice_representation_hash.length, 64);
+  assert.equal(p.reference_audio_hashes.length, 4); assert.equal(p.voice_representation_hash.length, 64);
   assert.deepEqual(await new VoiceLab({ directory: dir, provider: fake }).get(p.profile_id), p);
   if (process.platform !== 'win32') assert.equal((await fs.stat(path.join(dir, p.profile_id, 'representation.bin'))).mode & 0o777, 0o600);
 });
-test('sample upload requires recording state, valid quality, guided-text confirmation and six initial samples', async t => {
+test('sample upload requires recording state, valid quality, guided-text confirmation and four initial samples', async t => {
   const { lab } = await fixture(t), p = await lab.create(consent);
   await assert.rejects(lab.sample(p.profile_id, 0, wav(), false), /Confirm/);
   await assert.rejects(lab.sample(p.profile_id, 12, wav(), true), /Confirm/);
   await assert.rejects(lab.sample(p.profile_id, 0, wav(1), true), /Record again/);
-  await assert.rejects(lab.build(p.profile_id), /six/);
-  await lab.sample(p.profile_id, 6, wav(), true); assert.equal((await lab.get(p.profile_id)).samples[0].text, PROMPTS[0].text);
+  await assert.rejects(lab.build(p.profile_id), /all 4/);
+  await lab.sample(p.profile_id, 4, wav(), true); assert.equal((await lab.get(p.profile_id)).samples[0].text, PROMPTS[0].text);
 });
 test('technical synthesis is not acceptance; current A/B reports plus explicit acceptance required', async t => {
   const { lab } = await fixture(t), p = await built(lab);
@@ -109,7 +109,7 @@ test('reject and requalification revoke assignments and require new acceptance',
   q = await lab.reset(p.profile_id, 'reject'); assert.equal(q.qualification_status, 'REJECTED'); assert.equal(q.voice_representation_hash, undefined);
   await assert.rejects(lab.test(p.profile_id), /Create/);
   q = await lab.reset(p.profile_id, 'add-sample'); assert.equal(q.qualification_status, 'RECORDING');
-  await lab.sample(p.profile_id, 6, wav(8), true); assert.equal((await lab.get(p.profile_id)).samples.length, 7);
+  await lab.sample(p.profile_id, 4, wav(8), true); assert.equal((await lab.get(p.profile_id)).samples.length, 5);
 });
 test('deletion removes reference audio, prompt, comparisons and generated role files', async t => {
   const { lab, dir } = await fixture(t), p = await accepted(lab);
@@ -151,6 +151,13 @@ test('HTTP endpoints enforce auth for list, writes, audio and unknown paths; dis
   assert.equal((await fetch(url + '/config', { headers: { 'x-voice-lab-key': key, 'sec-fetch-site': 'cross-site' } })).status, 403);
   const response = await fetch(url + '/profiles', { headers: { 'x-voice-lab-key': key } }); assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'private, no-store');
   assert.equal(response.headers.get('access-control-allow-origin'), null);
+  const headers = { 'x-voice-lab-key': key, 'content-type': 'application/json' };
+  const created = await (await fetch(url + '/profiles', { method: 'POST', headers, body: JSON.stringify(consent) })).json();
+  const sampleUrl = url + `/profiles/${created.profile_id}/samples`;
+  const take = { index: 0, audio: wav().toString('base64'), confirmed_text: true };
+  assert.equal((await fetch(sampleUrl, { method: 'POST', headers, body: JSON.stringify(take) })).status, 400);
+  assert.equal((await fetch(sampleUrl, { method: 'POST', headers, body: JSON.stringify({ ...take, prompt_text: LEGACY_PROMPTS[0].text }) })).status, 400);
+  assert.equal((await fetch(sampleUrl, { method: 'POST', headers, body: JSON.stringify({ ...take, prompt_text: PROMPTS[0].text }) })).status, 200);
   let status;
   await voiceLabRoutes({ directory: dir, provider: fake, enabled: false, key })({ headers: {} }, { writeHead: s => status = s, end() {} }, new URL(url + '/config'));
   assert.equal(status, 503);
@@ -162,11 +169,23 @@ test('provider is fail closed and rejects remote/unsecured worker targets', asyn
 });
 test('conditioning failure leaves the profile unaccepted with its recordings intact', async t => {
   const { lab, fake } = await fixture(t), p = await lab.create(consent);
-  for (let i = 0; i < 6; i++) await lab.sample(p.profile_id, i, wav(), true);
+  for (let i = 0; i < PROMPTS.length; i++) await lab.sample(p.profile_id, i, wav(), true);
   fake.create = async () => { throw Error('OmniVoice unavailable'); };
   await assert.rejects(lab.build(p.profile_id), /unavailable/);
   const restored = await lab.get(p.profile_id);
-  assert.equal(restored.qualification_status, 'RECORDING'); assert.equal(restored.user_acceptance, false); assert.equal(restored.samples.length, 6);
+  assert.equal(restored.qualification_status, 'RECORDING'); assert.equal(restored.user_acceptance, false); assert.equal(restored.samples.length, 4);
+});
+test('old recorded profiles retain six original texts while empty profiles adopt the four-sentence guide', async t => {
+  const { lab } = await fixture(t), p = await lab.create(consent);
+  delete p.recording_prompts; await lab.write(p);
+  assert.equal((await lab.get(p.profile_id)).recording_prompts.length, 4);
+  p.samples = [{ index: 0, text: LEGACY_PROMPTS[0].text }]; await lab.write(p);
+  const legacy = await lab.get(p.profile_id);
+  assert.deepEqual(legacy.recording_prompts, LEGACY_PROMPTS);
+  assert.equal(legacy.samples[0].text, LEGACY_PROMPTS[0].text);
+  await assert.rejects(lab.build(p.profile_id), /all 6/);
+  for (let i = 0; i < 6; i++) await lab.sample(p.profile_id, i, wav(), true);
+  assert.equal((await lab.build(p.profile_id)).qualification_status, 'UNQUALIFIED');
 });
 test('bout judge validates scores and allows a tie without inventing a winner', () => {
   assert.equal(validateBoutScore({ score_a: 8, score_b: 8, reason: 'Balanced evidence' }).winner, 'TIE');

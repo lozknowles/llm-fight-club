@@ -1,8 +1,16 @@
-import { consentReady, canRecord, canAcceptVoice } from './voice-lab-state.js';
+import { consentReady, canRecord, canAcceptVoice, nextSentence } from './voice-lab-state.js';
 import { captureConstraints, captureDescription } from './voice-lab-capture.js';
 const $ = id => document.getElementById(id), base = new URL('.', location.href);
 let key = '', config, profile, profiles = [], busy = false, recording = false, stream, context, recorder, analyser, chunks = [], take, quality;
 let started = 0, frame, audioUrl, sampleIndex = 0, boutCancelled = false, boutEvidence = null, activeConversation;
+let pendingNext = null;
+const guide = () => profile?.recording_prompts || config.prompts;
+function selectGuide() {
+  const prompts = guide(); pendingNext = null;
+  sampleIndex = profile ? nextSentence(profile) ?? 0 : 0;
+  $('sampleIndex').replaceChildren(...Array.from({ length: prompts.length * 2 }, (_, i) => new Option(`${i + 1}. ${prompts[i % prompts.length].category}${i >= prompts.length ? ' — optional retake' : ''}`, i)));
+  $('sampleIndex').value = String(sampleIndex);
+}
 const status = text => { $('status').textContent = text; };
 async function api(route, method = 'GET', value, lab = true) {
   const response = await fetch(new URL(lab ? `api/voice-lab${route}` : route, base), {
@@ -33,11 +41,23 @@ function render() {
   $('comparison').hidden = !['UNQUALIFIED', 'TESTED'].includes(state);
   $('assignment').hidden = state !== 'ACCEPTED';
   $('bout').hidden = state !== 'ACCEPTED' || !['ANNOUNCER', 'COMMENTATOR'].every(r => profile.approved_roles.includes(r));
-  $('prompt').textContent = config.prompts[sampleIndex % 6].text;
-  $('progress').textContent = `Sample ${sampleIndex + 1} · ${profile.samples.length} accepted (six required; up to twelve alternatives)`;
-  $('record').disabled = !canRecord({ state, microphone: Boolean(stream), recording, busy });
+  const prompts = guide(), current = prompts[sampleIndex % prompts.length];
+  $('guideTitle').textContent = `Sentence ${sampleIndex % prompts.length + 1} of ${prompts.length} — ${current.category}`;
+  $('prompt').textContent = current.text;
+  $('deliveryHint').textContent = current.delivery || 'Read naturally, in your own voice.';
+  $('guideSteps').replaceChildren(...prompts.map(p => {
+    const li = document.createElement('li'), saved = profile.samples.some(s => s.index === p.index);
+    li.textContent = `${saved ? '✓ Saved' : 'To record'} — ${p.category}`; return li;
+  }));
+  const savedCount = prompts.filter(p => profile.samples.some(s => s.index === p.index)).length;
+  $('progress').textContent = `${savedCount} of ${prompts.length} required sentences saved · ${profile.samples.length} total takes`;
+  $('nextSentence').hidden = pendingNext === null;
+  $('nextSentence').disabled = busy || recording;
+  $('nextSentence').textContent = `Ready for sentence ${(pendingNext ?? 0) + 1}`;
+  $('guideNote').textContent = prompts.length === 4 ? 'Four contrasting sentences, recorded one at a time. Read only the large text; delivery hints are not spoken.' : 'This profile keeps its original six-sentence guide to preserve existing recordings. A new enrolment uses four sentences.';
+  $('record').disabled = pendingNext !== null || !canRecord({ state, microphone: Boolean(stream), recording, busy });
   $('stopRecord').disabled = !recording;
-  $('enableMic').disabled = busy || recording;
+  $('enableMic').disabled = busy || recording || pendingNext !== null;
   $('sampleIndex').disabled = busy || recording;
   $('microphones').disabled = busy || recording;
   $('captureMode').disabled = busy || recording;
@@ -45,7 +65,7 @@ function render() {
   $('playTake').disabled = busy || recording || !take;
   $('rerecord').disabled = busy || recording || !take;
   $('acceptSample').disabled = busy || recording || !quality?.good || !$('confirmedText').checked;
-  $('build').disabled = busy || recording || !config.prompts.every(p => profile.samples.some(s => s.index === p.index));
+  $('build').disabled = busy || recording || !prompts.every(p => profile.samples.some(s => s.index === p.index));
   const t = profile.tests.at(-1);
   $('testText').textContent = t?.text || 'Create a synthetic test to begin comparison.';
   for (const id of ['playOriginal', 'playSynthetic']) $(id).disabled = busy || !t;
@@ -103,6 +123,7 @@ async function enableMic() {
   } catch (error) { await micOff(); throw Error(`Microphone unavailable: ${error.message}`); }
 }
 function startRecording() {
+  if (pendingNext !== null) return;
   if (!canRecord({ state: profile?.qualification_status, microphone: Boolean(stream), recording, busy })) return;
   stopPlayer(); resetTake(); recording = true; started = performance.now(); recorder.port.postMessage('record'); $('recordState').className = 'active'; render();
 }
@@ -128,7 +149,7 @@ async function finishRecording() {
 }
 $('connect').onclick = () => action(async () => {
   key = $('accessKey').value; config = await api('/config'); $('accessKey').value = ''; $('unlock').hidden = true; $('lab').hidden = false; $('startVideo').disabled = false;
-  $('sampleIndex').replaceChildren(...Array.from({ length: 12 }, (_, i) => new Option(`${i + 1}. ${config.prompts[i % 6].category}${i >= 6 ? ' — optional alternative' : ''}`, i)));
+  selectGuide();
   const app = await api('api/config', 'GET', null, false);
   for (const id of ['modelA', 'modelB']) $(id).replaceChildren(...app.models.map(m => new Option(m, m)));
   $('modelB').selectedIndex = Math.min(1, app.models.length - 1);
@@ -140,11 +161,11 @@ for (const id of ['permission', 'synthetic', 'purpose', 'relationship', 'display
 $('continue').onclick = () => action(async () => {
   profile = await api('/profiles', 'POST', { consent_version: config.consent_version, display_name: $('displayName').value,
     relationship: $('relationship').value, permission: $('permission').checked, synthetic: $('synthetic').checked, purpose: $('purpose').checked });
-  sampleIndex = 0; $('sampleIndex').value = '0'; await refreshProfiles(); status('Consent recorded. Enable your microphone, then deliberately press Record.');
+  selectGuide(); await refreshProfiles(); status('Sentence 1 is ready below. Read the delivery hint, enable your microphone, then press Record when ready.');
 });
 $('newProfile').onclick = async () => { await micOff(); stopPlayer(); profile = null; clearConsent(); resetTake(); $('bout').hidden = true; render(); };
-$('profiles').onchange = () => action(async () => { await micOff(); stopPlayer(); profile = $('profiles').value ? await api(`/profiles/${$('profiles').value}`) : null; clearConsent(); resetTake(); if (profile) { $('announcer').checked = profile.approved_roles.includes('ANNOUNCER'); $('commentator').checked = profile.approved_roles.includes('COMMENTATOR'); $('publicationDisclosure').checked = profile.publication_disclosure; } });
-$('sampleIndex').onchange = () => { sampleIndex = Number($('sampleIndex').value); resetTake(); };
+$('profiles').onchange = () => action(async () => { await micOff(); stopPlayer(); profile = $('profiles').value ? await api(`/profiles/${$('profiles').value}`) : null; selectGuide(); clearConsent(); resetTake(); if (profile) { $('announcer').checked = profile.approved_roles.includes('ANNOUNCER'); $('commentator').checked = profile.approved_roles.includes('COMMENTATOR'); $('publicationDisclosure').checked = profile.publication_disclosure; } });
+$('sampleIndex').onchange = () => action(async () => { await micOff(); stopPlayer(); pendingNext = null; sampleIndex = Number($('sampleIndex').value); resetTake(); status('Sentence selected. Enable your microphone, then press Record when ready.'); });
 $('enableMic').onclick = () => action(enableMic);
 $('disableMic').onclick = () => action(async () => { await micOff(); status('Microphone off. Existing take retained.'); });
 $('captureMode').onchange = () => action(async () => { await micOff(); status('Capture mode changed. Press Enable microphone to apply it; existing take is unchanged.'); });
@@ -153,10 +174,19 @@ $('record').onclick = startRecording; $('stopRecord').onclick = finishRecording;
 $('playTake').onclick = () => action(() => play(take));
 $('rerecord').onclick = () => { resetTake(); status('Take discarded from this tab. Enable the microphone and press Record for a new take.'); };
 $('acceptSample').onclick = () => action(async () => {
-  profile = await post('samples', { index: sampleIndex, audio: await toBase64(take), confirmed_text: $('confirmedText').checked });
-  sampleIndex = config.prompts.find(p => !profile.samples.some(s => s.index === p.index))?.index ?? sampleIndex;
-  $('sampleIndex').value = String(sampleIndex); resetTake(); status('Sample saved privately.');
+  profile = await post('samples', { index: sampleIndex, prompt_text: guide()[sampleIndex % guide().length].text, audio: await toBase64(take), confirmed_text: $('confirmedText').checked });
+  pendingNext = nextSentence(profile);
+  resetTake();
+  status(pendingNext === null ? `All ${guide().length} sentences saved. You can now create your reusable voice prompt.` : `Sentence saved privately. Take a breath, then choose “Ready for sentence ${pendingNext + 1}” when you want to continue.`);
+  if (pendingNext !== null) $('nextSentence').focus();
 });
+$('nextSentence').onclick = () => {
+  if (busy || recording || pendingNext === null) return;
+  stopPlayer(); sampleIndex = pendingNext; pendingNext = null;
+  $('sampleIndex').value = String(sampleIndex); resetTake();
+  $('guideTitle').focus();
+  status(`Sentence ${sampleIndex + 1} of ${guide().length} is ready. Enable your microphone and press Record when you are ready; nothing starts automatically.`);
+};
 $('build').onclick = () => action(async () => { await micOff(); status('Creating a reusable reference prompt. Model weights are not being trained.'); profile = await post('build'); await refreshProfiles(); status('Prompt created, but voice is NOT accepted. Generate and listen to a comparison.'); });
 $('generateTest').onclick = () => action(async () => { status('Generating new speech from the saved reference prompt…'); profile = await post('test'); status('Test generated. Listen to the original AND synthetic clip, then decide for yourself.'); });
 for (const [button, kind] of [['playOriginal', 'original'], ['playSynthetic', 'synthetic']]) $(button).onclick = () => action(async () => {

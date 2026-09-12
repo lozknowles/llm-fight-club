@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-12 — Four-sentence guided voice enrolment
+
+- Four original displayed sentences cover warm conversation, curiosity, firm disagreement and reflective reassurance, each with separate delivery guidance.
+- Save/listen/confirm one take at a time; an explicit Ready for sentence N button advances the guide without starting the microphone or recording. Saved progress resumes at the first missing sentence; optional retakes remain available.
+- Pin prompt text to each profile. Existing recorded legacy profiles retain their six original prompts; empty legacy profiles adopt four on their next save. No recordings are deleted or relabelled. Stale browser sample uploads are rejected rather than assigning the wrong text.
+- Software tests cover the complete four-save UI progression, legacy compatibility, recording limits and stale-guide protection. Physical four-sentence capture remains operator-qualified.
+
 ## 2026-09-12 — Noisy microphone capture troubleshooting
 
 - Default new captures to browser speech cleanup (noise suppression and echo cancellation), with raw studio capture still selectable. Automatic gain stays off to avoid raising noise alongside faint speech.

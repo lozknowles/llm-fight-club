@@ -8,6 +8,13 @@ qualification and role permissions. Its provider-neutral adapter contract suppor
 reference creation and synthesis. `OmniVoiceEnrolmentProvider` connects only to a
 loopback existing-worker extension; ConversationEngine has no model dependency.
 
+Each voice profile pins its recording prompts. New or empty legacy profiles use
+the four-sentence guide; legacy profiles with recordings preserve their six texts.
+Sample upload must match the profile's displayed text. Browser progression waits
+for an explicit Ready action after saving, and separately for microphone/Record
+actions; no timer or sample acceptance starts capture. Only one selected reference
+conditions OmniVoice, so varied takes are not multi-style model training.
+
 Permitted presentation role → accepted profile → provider adapter → existing
 OmniVoice model. A synthetic voice never becomes an authentication or Agent Control
 authority identity. Provider execution success and operator acceptance are separate.
