@@ -1,6 +1,13 @@
 # LLM Fight Club / Spoken AI Studio
 
-## Optional Voice Lab (development branch; private preview only)
+## Release 1.0.0 — protected internal deployment
+
+This release includes Voice Lab behind the existing Private Hub password/SMS gate,
+with a separate Voice Lab access key. Source is in the private GitHub repository;
+voice recordings, reusable conditioning data, credentials and model weights are not
+part of the release. See [RELEASE-1.0.0.md](RELEASE-1.0.0.md) for scope and limitations.
+
+## Optional Voice Lab
 
 Consent-driven guided enrolment, private reusable OmniVoice reference conditioning,
 original/synthetic comparisons, explicit operator acceptance and ANNOUNCER /

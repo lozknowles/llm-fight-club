@@ -1,5 +1,19 @@
 # Voice Lab qualification evidence — 12 September 2026
 
+## Operator enrolment and release gate — current status
+
+The operator has now physically recorded four samples using the USB microphone,
+played original and synthetic comparisons, personally accepted the voice and
+assigned ANNOUNCER and COMMENTATOR. The stored profile reports ACCEPTED with
+four samples and two tests. No private audio or identifying profile records are
+included in this document or the release.
+
+The operator explicitly requested GitHub release 1.0 and protected-site deployment.
+Automated Node coverage now totals 77 passing tests. A full accepted-voice bout,
+independent likeness scoring and protected HTTPS microphone capture are not yet
+qualified. Earlier NOT performed/zero-profile statements below are historical
+snapshots and are superseded by this addendum, not current release status.
+
 ## Approved private browser access — 12 September
 
 Operator explicitly approved the one additional SSH forwarding destination and confirmed SSH uses **port 2222**. Effective policy for user loz is now local forwarding only, with `PermitOpen 127.0.0.1:4173 127.0.0.1:8766 127.0.0.1:18891`. No other destination or public listener was added.

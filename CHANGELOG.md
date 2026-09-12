@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 — 2026-09-12
+
+- First versioned GitHub release combining the spoken conversation engine and consent-driven Voice Lab, including four guided recordings, explicit saving, custom-sentence synthesis and original/synthetic comparison.
+- Operator completed USB-microphone enrolment, original/synthetic playback, explicit voice acceptance and announcer/commentator assignment. Those private assets are retained outside source control.
+- Added a versioned health response and visible Voice Lab release label. Protected-site deployment reuses the existing File Store password/SMS gate and existing OmniVoice worker.
+- No claim of full-duplex speech, multi-reference model training, commercial model licensing, or an accepted-voice qualification bout. See release notes for limitations.
+
 ## 2026-09-12 — Enter a sentence and Generate voice
 
 - Added a 500-character sentence box and counter to the original/synthetic comparison, with the requested Generate voice label. Blank input still uses a suggested phrase.

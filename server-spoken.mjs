@@ -15,6 +15,7 @@ import { voiceLabRoutes } from './lib/voice-lab-http.mjs';
 import { validateBoutScore } from './lib/voice-lab-judge.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
 const publicDir = path.join(root, 'public');
 const dataDir = process.env.FIGHT_CLUB_DATA_DIR || path.join(root, '.data-v2');
 let routes = {};
@@ -551,7 +552,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/tts/voices') return await proxySpeech(request, response, url.pathname);
     if (request.method === 'POST' && ['/tts/synthesize', '/tts/stream'].includes(url.pathname)) return await proxySpeech(request, response, url.pathname);
     if (request.method === 'GET' && url.pathname === '/api/config') return send(response, 200, { formats: FORMATS, personalities: PERSONALITIES, interruptionLevels: INTERRUPTION_LEVELS, conversationHeatLevels: CONVERSATION_HEAT_LEVELS, conversationHeat: CONVERSATION_HEAT, models: Object.keys(routes).length ? Object.keys(routes) : ['qwen3-8b'] });
-    if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok', engine: 'conversation-v2', speech: 'provider-neutral-router' });
+    if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok', version, engine: 'conversation-v2', speech: 'provider-neutral-router' });
     if (request.method === 'POST' && url.pathname === '/api/conversations') {
       const conversation = createConversation(await body(request));
       conversations.set(conversation.id, conversation);

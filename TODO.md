@@ -11,12 +11,12 @@
 - [x] Operator approved controlled existing-worker extension activation on 12 September; live app/router stayed active.
 - [x] Verify real conditioning/synthesis using a new synthetic reference, legacy worker routes, separate auth and VRAM.
 - [x] Operator approved and verified one additional SSH PermitOpen destination (127.0.0.1:18891) for loz. SSH stays on 2222; existing 4173/8766 destinations preserved. Private browser page and authenticated worker health verified from MSI.
-- [ ] Physically detect/use MSI microphone through consent/Record controls.
-- [ ] Loz records and evaluates original/synthetic comparison.
-- [ ] Loz personally clicks ACCEPT VOICE (not done).
+- [x] Physically detect/use MSI USB microphone through consent/Record controls.
+- [x] Loz records four samples and evaluates original/synthetic comparison.
+- [x] Loz personally clicks ACCEPT VOICE; stored accepted state and presentation roles verified.
 - [ ] Run and capture real bout using accepted Loz presentation voice.
 - [ ] Review high-resolution video/audio and record latency/likeness evidence.
-- [ ] Obtain separate merge/release/deployment approval; do not auto-publish.
+- [x] Obtain separate merge/release/deployment approval; operator requested GitHub 1.0 and protected-site deployment on 12 September.
 - [ ] Future: private-hub session integration/per-user ACLs and broader format presentation controls.
 
 Separate pre-existing issue: interrupted-turn WAV retention and TTS look-ahead remain outside this enrolment implementation. LLM text prefetch already exists; audio pre-generation does not. Do not label those earlier issues fixed here.
