@@ -1,6 +1,6 @@
 # Voice Lab — implementation and operator qualification
 
-Status: isolated development feature. Not merged, released, deployed, or physically qualified. No Loz voice has been recorded, created, or accepted by this work.
+Status: isolated development feature. Operator approved private qualification activation on 12 September 2026; the existing worker extension is now active and technically tested. Not merged, released, publicly deployed, or physically qualified. No Loz voice has been recorded, created, or accepted by this work. See the dated activation addendum in `VOICE-LAB-QUALIFICATION.md`; older inspection notes below describe the pre-activation state.
 
 ## Actual installed OmniVoice
 

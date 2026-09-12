@@ -8,8 +8,9 @@
 - [x] Explicit acceptance, ANNOUNCER/COMMENTATOR assignment and synthetic disclosure.
 - [x] Real-bout qualification runner and optional operator-started video capture.
 - [x] Automated mocked/unit regression tests and operator documentation.
-- [ ] Approve and activate extension on the existing worker without disrupting protected workloads.
-- [ ] Verify real conditioning/synthesis plus legacy worker routes and VRAM.
+- [x] Operator approved controlled existing-worker extension activation on 12 September; live app/router stayed active.
+- [x] Verify real conditioning/synthesis using a new synthetic reference, legacy worker routes, separate auth and VRAM.
+- [ ] Approve one additional SSH PermitOpen destination (127.0.0.1:18891) to reach the private preview from MSI. Existing permitted ports are in use; no policy bypass or change performed.
 - [ ] Physically detect/use MSI microphone through consent/Record controls.
 - [ ] Loz records and evaluates original/synthetic comparison.
 - [ ] Loz personally clicks ACCEPT VOICE (not done).

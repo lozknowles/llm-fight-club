@@ -1,5 +1,27 @@
 # Voice Lab qualification evidence — 12 September 2026
 
+## Approved private activation — 08:14 BST, 12 September
+
+The operator explicitly approved controlled restart of the existing shared OmniVoice worker. Added only a named service drop-in using the unchanged existing worker source, original virtualenv/model/state arguments, resource limits and existing authentication. No second model was loaded. Separate owner/worker keys were generated into owner-only private files, never Git or tool output.
+
+Actual checks passed:
+
+- Legacy `/health` returned ready, legacy `/synthesize` generated a fresh original synthetic reference.
+- New `/voice-lab/health`, `/create` and `/synthesize` worked using the installed OmniVoice 0.2.1 and same GPU model.
+- Legacy worker credentials were rejected with HTTP 401 on the new enrolment routes.
+- Reference was **newly generated synthetic speech, not a human recording**. No human consent or acceptance was simulated.
+- Original synthesis: 7.08 s audio, 3.107 s generation, RTF 0.439.
+- Reference-conditioned synthesis: 7.12 s audio, 4.411 s generation, RTF 0.619.
+- Existing-worker model load after controlled restart: 11.744 s.
+- CUDA process peak since worker startup: 3,742,754,304 bytes (not whole-GPU usage). Whole GPU after checks: 12,933 MiB.
+- Live app and speech router remained active. The canonical app source remained unchanged.
+
+Private technical evidence: `/fast/work/llm-fight-club-voice-lab-private-20260912/worker-verification.json` and its `technical-evidence/` WAVs. No Loz profile exists and physical microphone/video/likeness/bout acceptance remains pending.
+
+Isolated app service `llm-fight-club-voice-lab-preview.service` is healthy on **remote loopback 127.0.0.1:18891**. Browser access from MSI is currently blocked by the SSH account's `PermitOpen` policy: only 4173 and 8766 are allowed, and both host existing services. No SSH policy was changed and those ports/services were not repurposed. Opening the one additional loopback forwarding destination requires operator approval. There is no new public listener or public website route.
+
+The sections below preserve pre-activation implementation evidence; this dated addendum supersedes their worker-activation status only.
+
 ## Implementation / branch
 
 Branch: `feature/voice-lab`, based on `c75ef36`.

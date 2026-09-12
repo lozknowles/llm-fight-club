@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-12 — Approved private worker activation
+
+- Activated the optional enrolment extension on the existing shared OmniVoice worker after explicit operator approval; preserved original source/model/legacy routes and existing service limits.
+- Verified real reference conditioning with a new original synthetic reference: 7.12 s generated speech in 4.41 s. This is not human enrolment or likeness qualification.
+- Started an isolated loopback-only Voice Lab preview. MSI access awaits approval for one additional SSH forwarding destination; no SSH access policy or public website route changed.
+
 ## 2026-09-12 — Voice Lab (isolated development, physical qualification pending)
 
 - Added optional, consent-driven microphone enrolment with six guided categories,
