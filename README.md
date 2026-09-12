@@ -1,5 +1,25 @@
 # LLM Fight Club / Spoken AI Studio
 
+## Release 1.2.0 — steady voices and shorter gaps
+
+The protected app now prepares one future turn's text **and audio** during playback.
+Playback completion still controls the next turn; interruptions discard obsolete
+preparation. This reduces gaps when preparation fits within the current line, but
+does not promise gapless playback of every short exchange. A model calculation
+already running on the shared worker may finish after cancellation; its stale
+result is not played or committed.
+
+Built-in OmniVoice voices use fixed original synthetic anchors when
+`VOICE_LAB_SYNTHETIC_VOICES` points to the private manifest. Provision explicitly
+with `scripts/create-synthetic-anchors.mjs NEW_PRIVATE_DIRECTORY`, using the existing
+worker environment and internal adapter. Never use a real person's recording as
+a built-in anchor. No second model is installed. Silent voice substitution is
+disabled; an unavailable voice produces a retryable error.
+
+New turns omit speaker labels/posture notes and honour spoken word limits.
+Playback durations reflect audio rather than page uptime. Reload Studio and start
+a new conversation after upgrading; historical transcripts are not rewritten.
+
 ## Release 1.1.0 — recorded voices in Fight Club
 
 In Voice Lab, select an accepted profile and check **Available in Fight Club**.

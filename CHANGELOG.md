@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 — 2026-09-12
+
+- Prepare next-turn audio as well as text while the current speaker plays. No transcript advancement before playback completion. Invalidation on heat, pause, stop, skip and human/model interruptions discards obsolete work.
+- Pin built-in OmniVoice performers to private original synthetic reference anchors, using the existing installed worker. Recorded user profiles are unchanged. Refuse silent provider/voice substitution.
+- Remove speaker labels and acting/posture directions from generated dialogue; enforce spoken word budgets and clarify who the other participant is.
+- Fix playback accounting to use media duration, not page uptime; guard stale completion events by turn ID and playback generation. Add speech retry without generating a different turn.
+- Add HTTP pipeline regression coverage for overlap, invalidation, fallback refusal, output cleaning and stable anchor routing.
+
 ## 1.1.0 — 2026-09-12
 
 - Added saved-profile **Available in Fight Club** opt-in and clear recorded-voice labels at the top of participant voice menus.

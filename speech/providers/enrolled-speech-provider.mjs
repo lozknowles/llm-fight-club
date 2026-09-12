@@ -10,13 +10,13 @@ export class EnrolledSpeechProvider extends SpeechProvider {
   }
   supports(voice) { return typeof voice === 'string' && voice.startsWith('enrolled:'); }
   async voicesForMenu() { return this.enabled ? this.lab.fightClubVoices() : []; }
-  async synthesize({ voice, text, speechRate = 1 }) {
+  async synthesize({ voice, text, speechRate = 1, signal }) {
     if (!this.enabled) throw Error('Recorded voices are disabled on this deployment');
     if (!/^enrolled:[a-f0-9-]{36}$/.test(voice)) throw Error('Invalid recorded voice ID');
     const rate = Number(speechRate);
     if (!Number.isFinite(rate) || rate < .7 || rate > 1.4) throw Error('Voice speed must be between 0.7 and 1.4');
     const start = performance.now();
-    const result = await this.lab.fightClubSpeech(voice.slice(9), text);
+    const result = await this.lab.fightClubSpeech(voice.slice(9), text, signal);
     const audio = rate === 1 ? result.audio : await changeTempo(result.audio, rate);
     return { ...result, audio, latencyMs: Math.round(performance.now() - start), durationMs: (audio.length - 44) / 48 };
   }
@@ -25,7 +25,7 @@ export class EnrolledSpeechProvider extends SpeechProvider {
     return new Response(result.audio, { headers: {
       'content-type': 'audio/wav', 'x-audio-format': 'wav',
       'x-tts-provider': this.id, 'x-tts-model': 'OmniVoice', 'x-tts-voice': payload.voice,
-      'x-tts-profile': 'ENROLLED', 'x-tts-latency-ms': String(result.latencyMs),
+      'x-tts-profile': this.profile || 'ENROLLED', 'x-tts-latency-ms': String(result.latencyMs),
       'x-tts-generation-ms': String(result.latencyMs), 'x-tts-audio-duration-ms': String(result.durationMs),
       'x-tts-rtf': String(result.latencyMs / result.durationMs), 'x-tts-fallback': 'false',
     } });

@@ -15,6 +15,8 @@ import { voiceLabRoutes } from './lib/voice-lab-http.mjs';
 import { VoiceLab } from './lib/voice-lab.mjs';
 import { OmniVoiceEnrolmentProvider } from './speech/providers/voice-lab-provider.mjs';
 import { EnrolledSpeechProvider } from './speech/providers/enrolled-speech-provider.mjs';
+import { FixedOmniVoiceProvider } from './speech/providers/fixed-omnivoice-provider.mjs';
+import { spokenText } from './lib/spoken-text.mjs';
 import { validateBoutScore } from './lib/voice-lab-judge.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +29,17 @@ const models = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_UR
 const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:18772';
 const conversations = new Map();
 const prefetches = new Map();
+const preparedAudio = new Map();
+const generations = new Set();
+function invalidatePreparation(id) {
+  prefetches.get(id)?.controller.abort();
+  prefetches.delete(id);
+  const c = conversations.get(id);
+  if (c) c.preparationRevision = (c.preparationRevision || 0) + 1;
+  for (const [turn, entry] of preparedAudio) if (entry.conversationId === id) {
+    entry.controller.abort(); preparedAudio.delete(turn);
+  }
+}
 const judgeBusy = new Set();
 const voiceProfilesStore = new VoiceLab({
   directory: process.env.VOICE_LAB_DATA_DIR || path.join(dataDir, 'voice-lab-private'),
@@ -35,6 +48,7 @@ const voiceProfilesStore = new VoiceLab({
 const enrolledSpeech = new EnrolledSpeechProvider({ lab: voiceProfilesStore,
   enabled: process.env.VOICE_LAB_ENABLED === '1' && process.env.VOICE_LAB_FIGHT_CLUB_ENABLED === '1',
 });
+const fixedSpeech = new FixedOmniVoiceProvider({ manifest: process.env.VOICE_LAB_SYNTHETIC_VOICES, provider: voiceProfilesStore.provider });
 const voiceLab = voiceLabRoutes({
   lab: voiceProfilesStore,
   directory: process.env.VOICE_LAB_DATA_DIR || path.join(dataDir, 'voice-lab-private'),
@@ -114,10 +128,65 @@ async function body(request) {
   return raw ? JSON.parse(raw) : {};
 }
 
+async function speechResponse(payload, pathname = '/tts/stream', signal) {
+  let upstream;
+  if (enrolledSpeech.supports(payload?.voice)) upstream = await enrolledSpeech.response({ ...payload, signal });
+  else if (fixedSpeech.supports(payload?.voice)) upstream = await fixedSpeech.response({ ...payload, signal });
+  else upstream = await fetch(new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`), {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(180000)]) : AbortSignal.timeout(180000),
+  });
+  // Explicit identities must never silently become a different provider's voice.
+  if (upstream.headers.get('x-tts-fallback') === 'true') {
+    await upstream.body?.cancel();
+    throw Error('Selected voice unavailable. Automatic voice substitution is disabled; choose another voice explicitly.');
+  }
+  return upstream;
+}
+function turnSpeechPayload(c, participant, text) {
+  const heat = conversationHeatDirection(c);
+  return { voice: participant.voice, text, speechRate: participant.speechRate || 1,
+    profile: c.speechProfile || 'LIVE_FAST', delivery: c.delivery || 'PASSIONATE', format: c.format, style: c.style, role: participant.role,
+    deliveryHints: [participant.personality.speakingRhythm, participant.personality.temperament, participant.personality.humourStyle, participant.personality.rhetoricalStyle, ...heat.deliveryHints].filter(Boolean) };
+}
+async function bufferSpeech(payload, signal) {
+  const response = await speechResponse(payload, '/tts/stream', signal);
+  if (!response.ok) { await response.body?.cancel(); throw Error(`Speech preparation failed (${response.status})`); }
+  const chunks = []; let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    if (signal.aborted || size > 10000000) throw Error('Speech preparation cancelled or too large');
+    chunks.push(Buffer.from(chunk));
+  }
+  if (!size) throw Error('Speech preparation was empty');
+  return { bytes: Buffer.concat(chunks), headers: Object.fromEntries(response.headers) };
+}
 async function proxySpeech(request, response, pathname) {
-  const target = new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`);
-  const payload = request.method === 'POST' ? await body(request) : null;
-  const upstream = enrolledSpeech.supports(payload?.voice) ? await enrolledSpeech.response(payload) : await fetch(target, {
+  let payload = request.method === 'POST' ? await body(request) : null;
+  const conversation = payload?.conversationId ? conversations.get(String(payload.conversationId)) : null;
+  const turn = conversation?.transcript.find(item => item.turn_id === payload?.turnId);
+  if (payload?.conversationId) {
+    if (!turn || turn !== conversation.transcript.at(-1) || !conversation.awaitingPlayback || ['STOPPED','COMPLETED'].includes(conversation.state)) throw Error('Speech turn is no longer current');
+    if (turn.voice !== payload.voice || turn.text !== payload.text) throw Error('Speech does not match the recorded turn');
+    payload = { ...payload, ...turnSpeechPayload(conversation, conversation.participants.find(p => p.id === turn.speaker_id), turn.text) };
+  }
+  let upstream;
+  const cached = turn && preparedAudio.get(turn.turn_id);
+  if (cached) {
+    let audio;
+    try { audio = await cached.promise; } catch (error) {
+      if (preparedAudio.get(turn.turn_id) === cached) preparedAudio.delete(turn.turn_id);
+      throw error;
+    }
+    if (preparedAudio.get(turn.turn_id) !== cached || cached.controller.signal.aborted || !conversation.awaitingPlayback || conversation.transcript.at(-1) !== turn) throw Error('Prepared speech is obsolete');
+    if (enrolledSpeech.supports(turn.voice)) {
+      const p = await voiceProfilesStore.get(turn.voice.slice(9));
+      if (!p.fight_club_enabled || !p.user_acceptance || p.qualification_status !== 'ACCEPTED') throw Error('Recorded voice permission was revoked');
+    }
+    upstream = new Response(audio.bytes, { headers: { ...audio.headers, 'x-tts-prefetched': 'true' } });
+    preparedAudio.delete(turn.turn_id);
+  } else if (payload) upstream = await speechResponse(payload, pathname);
+  else upstream = await fetch(new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`), {
     method: request.method,
     headers: payload ? { 'content-type': 'application/json' } : undefined,
     body: payload ? JSON.stringify(payload) : undefined,
@@ -132,7 +201,7 @@ async function proxySpeech(request, response, pathname) {
     'content-type': upstream.headers.get('content-type') || 'application/octet-stream',
     'cache-control': 'no-store',
   };
-  for (const name of ['x-tts-provider', 'x-tts-model', 'x-tts-voice', 'x-tts-profile', 'x-tts-first-byte-ms', 'x-tts-latency-ms', 'x-tts-load-ms', 'x-tts-generation-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-vram-mib', 'x-tts-peak-vram-mb', 'x-tts-ram-mb', 'x-tts-fallback', 'x-tts-attempts', 'x-audio-format']) {
+  for (const name of ['x-tts-prefetched', 'x-tts-provider', 'x-tts-model', 'x-tts-voice', 'x-tts-profile', 'x-tts-first-byte-ms', 'x-tts-latency-ms', 'x-tts-load-ms', 'x-tts-generation-ms', 'x-tts-audio-duration-ms', 'x-tts-rtf', 'x-tts-vram-mib', 'x-tts-peak-vram-mb', 'x-tts-ram-mb', 'x-tts-fallback', 'x-tts-attempts', 'x-audio-format']) {
     const value = upstream.headers.get(name);
     if (value) headers[name] = value;
   }
@@ -142,8 +211,7 @@ async function proxySpeech(request, response, pathname) {
     response.writeHead(upstream.status, headers);
     return response.end(bytes);
   }
-  const conversation = payload?.conversationId ? conversations.get(String(payload.conversationId)) : null;
-  const turn = conversation?.transcript.find((item) => item.turn_id === payload?.turnId);
+  if (turn && (!conversation.awaitingPlayback || conversation.transcript.at(-1) !== turn || ['STOPPED','COMPLETED'].includes(conversation.state))) { await upstream.body?.cancel(); throw Error('Speech turn was cancelled'); }
   const archive = turn && turn.text === payload.text && turn.voice === payload.voice;
   const audioChunks = [];
   response.writeHead(upstream.status, headers);
@@ -153,7 +221,7 @@ async function proxySpeech(request, response, pathname) {
     if (archive) audioChunks.push(Buffer.from(chunk));
   }
   response.end();
-  if (archive && audioChunks.length) {
+  if (archive && audioChunks.length && !turn.interrupted && !turn.interrupted_by_audience && turn.text === payload.text) {
     await saveTurnAudio({
       dataDir,
       conversationId: conversation.id,
@@ -162,6 +230,10 @@ async function proxySpeech(request, response, pathname) {
       audioFormat: headers['x-audio-format'],
     });
     turn.audio_file = `${turn.turn_id}.wav`;
+    turn.tts_provider = headers['x-tts-provider'];
+    turn.tts_generation_latency_ms = Number(headers['x-tts-generation-ms']) || 0;
+    turn.synthesized_audio_duration_ms = Number(headers['x-tts-audio-duration-ms']) || null;
+    turn.audio_prefetched = headers['x-tts-prefetched'] === 'true';
     await persist(conversation);
   }
 }
@@ -239,7 +311,7 @@ function prompt(conversation, participant, analysis) {
     modelInterventionContext = `\n\nINTERRUPTION REACTION\nOnly the earlier heard fragment counts as spoken: “${modelIntervention.heardText}”`;
   }
   return {
-    system,
+    system: `${system}\nThis is audio dialogue, not a screenplay. Never write your name as a speaker label, stage directions, posture, gestures, parenthesised acting notes, or descriptions of movement. Express emotion through the words themselves. Your name is ${participant.name}; the OTHER participants are ${conversation.participants.filter(p => p.id !== participant.id).map(p => `${p.name} (${p.role})`).join(', ')}. Do not address yourself as the other speaker.`,
     user: `Premise/topic: ${conversation.premise}\n\nTranscript:\n${transcript(conversation) || '(none yet)'}\n\nAudience interventions:\n${interventionContext(conversation) || '(none)'}\n\nCompact character state:\n${JSON.stringify(states(conversation))}${analysis ? `\n\nPRIVATE DIRECTOR ANALYSIS (never repeat verbatim):\n${analysis}` : ''}${modelInterventionContext}\n\nTASK:\n${task}`,
   };
 }
@@ -439,6 +511,7 @@ async function generateDistinctTurn(conversation, participant, request) {
           ? stanceRetryRequest(conversation, participant, request, attempt)
         : noveltyRequest(conversation, participant, request, priorLines, attempt);
     const result = await models.generate({ model: participant.model, ...candidateRequest });
+    result.text = spokenText(result.text, participant.name, ['interviewer', 'examiner'].includes(participant.role) ? Math.min(35, conversation.turnLength) : conversation.turnLength);
     const repetition = assessRepetition(result.text, priorLines, threshold);
     const interventionAddressed = await interventionWasAddressed(participant.model, interventions, result.text);
     const stanceHeld = await debateStanceHeld(conversation, participant, result.text);
@@ -465,6 +538,7 @@ async function prepareTurn(conversation) {
   const addressedInterventionIds = pendingInterventions(working, participant).map((item) => item.id);
   const started = performance.now();
   const generated = await generateDistinctTurn(working, participant, request);
+  generated.result.text = spokenText(generated.result.text, participant.name, working.turnLength);
   return {
     transcriptLength: conversation.transcript.length,
     participantId: participant.id,
@@ -479,14 +553,26 @@ async function prepareTurn(conversation) {
 }
 
 async function generate(conversation) {
+  if (generations.has(conversation.id)) throw Error('Next turn is already being prepared');
+  if (conversation.awaitingPlayback || !['READY', 'ACTIVE'].includes(conversation.state)) throw Error('Complete playback before advancing');
+  generations.add(conversation.id);
+  try { return await generateCurrent(conversation); } finally { generations.delete(conversation.id); }
+}
+async function generateCurrent(conversation) {
+  const revision = conversation.preparationRevision || 0;
   const pending = prefetches.get(conversation.id);
   let prepared;
   if (pending?.transcriptLength === conversation.transcript.length) {
-    prepared = await pending.promise;
-    prefetches.delete(conversation.id);
+    try { prepared = await pending.promise; } catch (error) {
+      if (prefetches.get(conversation.id) === pending) prefetches.delete(conversation.id);
+      pending.controller.abort();
+      throw error;
+    }
   } else {
     prepared = await prepareTurn(conversation);
   }
+  if ((conversation.preparationRevision || 0) !== revision || conversation.awaitingPlayback || !['READY', 'ACTIVE'].includes(conversation.state)) throw Error('Prepared turn cancelled by a conversation change; retry');
+  prefetches.delete(conversation.id);
   const participant = beginTurn(conversation);
   if (participant.id !== prepared.participantId) throw new Error('Prefetched participant no longer matches turn policy');
   if (prepared.analysisEntry) {
@@ -520,6 +606,9 @@ async function generate(conversation) {
     intervention_fallback: prepared.interventionFallback,
     programme_introduction: programmeIntroduction,
   });
+  if (pending?.audioPromise && !pending.audioError && !pending.controller.signal.aborted) {
+    preparedAudio.set(row.turn_id, { conversationId: conversation.id, controller: pending.controller, promise: pending.audioPromise });
+  }
   conversation.telemetry.push({
     turn_id: row.turn_id,
     participant_id: participant.id,
@@ -571,7 +660,10 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/config') return send(response, 200, { formats: FORMATS, personalities: PERSONALITIES, interruptionLevels: INTERRUPTION_LEVELS, conversationHeatLevels: CONVERSATION_HEAT_LEVELS, conversationHeat: CONVERSATION_HEAT, models: Object.keys(routes).length ? Object.keys(routes) : ['qwen3-8b'] });
     if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok', version, engine: 'conversation-v2', speech: 'provider-neutral-router' });
     if (request.method === 'POST' && url.pathname === '/api/conversations') {
-      const conversation = createConversation(await body(request));
+      const input = await body(request);
+      const conversation = createConversation(input);
+      conversation.speechProfile = String(input.speechProfile || 'LIVE_FAST');
+      conversation.delivery = String(input.delivery || 'PASSIONATE');
       conversations.set(conversation.id, conversation);
       await persist(conversation);
       return send(response, 201, publicConversation(conversation));
@@ -607,7 +699,7 @@ const server = http.createServer(async (request, response) => {
       if (bargeMatch[2] === 'commit') {
         const decision = [...(conversation.interruptionTelemetry || [])].reverse().find((item) => item.turnId === payload.turnId && item.action === 'INTERRUPT');
         if (!decision) throw new Error('No current autonomous interrupt decision exists');
-        prefetches.delete(conversation.id);
+        invalidatePreparation(conversation.id);
         const previousAudioFile = conversation.transcript.at(-1)?.audio_file;
         const event = commitModelInterruption(conversation, {
           turnId: decision.turnId,
@@ -648,12 +740,12 @@ const server = http.createServer(async (request, response) => {
       if (action === 'next') return send(response, 200, { turn: await generate(conversation), conversation: publicConversation(conversation) });
       if (action === 'heat') {
         setConversationHeat(conversation, payload.heat);
-        prefetches.delete(conversation.id);
+        invalidatePreparation(conversation.id);
         await persist(conversation);
         return send(response, 200, publicConversation(conversation));
       }
       if (action === 'intervention') {
-        prefetches.delete(conversation.id);
+        invalidatePreparation(conversation.id);
         const previousTurn = conversation.transcript.at(-1);
         const previousAudioFile = conversation.awaitingPlayback && previousTurn?.audio_file;
         submitAudienceIntervention(conversation, payload.text, { durationMs: payload.durationMs, heardWordCount: payload.heardWordCount });
@@ -662,26 +754,43 @@ const server = http.createServer(async (request, response) => {
         return send(response, 200, publicConversation(conversation));
       }
       if (action === 'prefetch') {
+        if (conversation.state !== 'ACTIVE') throw Error('Prefetch requires an active conversation');
+        if (payload.turnId && payload.turnId !== conversation.transcript.at(-1)?.turn_id) throw Error('Audible turn changed');
         if (!conversation.awaitingPlayback) throw new Error('Prefetch requires a turn currently in playback');
         if (conversation.transcript.length >= conversation.turnLimit) return send(response, 200, { status: 'not-needed' });
         const existing = prefetches.get(conversation.id);
         if (!existing || existing.transcriptLength !== conversation.transcript.length) {
+          if (prefetches.size >= 16) return send(response, 202, { status: 'capacity-deferred' });
+          const controller = new AbortController();
           const promise = prepareTurn(conversation);
           promise.catch(() => {});
-          prefetches.set(conversation.id, { transcriptLength: conversation.transcript.length, promise });
+          const entry = { transcriptLength: conversation.transcript.length, promise, controller };
+          prefetches.set(conversation.id, entry);
+          if (conversation.outputMode !== 'TEXT') {
+            entry.audioPromise = promise.then(prepared => {
+              if (controller.signal.aborted || prefetches.get(conversation.id) !== entry) throw Error('Obsolete speech preparation');
+              const participant = conversation.participants.find(p => p.id === prepared.participantId);
+              return bufferSpeech(turnSpeechPayload(conversation, participant, prepared.result.text), controller.signal);
+            });
+            entry.audioPromise.catch(() => { entry.audioError = true; });
+          }
         }
         return send(response, 202, { status: 'preparing', transcriptLength: conversation.transcript.length });
       }
       if (action === 'complete-playback') {
+        if (payload.turnId && payload.turnId !== conversation.transcript.at(-1)?.turn_id) throw Error('Playback completion belongs to an older turn');
+        if (payload.skipped) invalidatePreparation(conversation.id);
+        const completedTurn = conversation.transcript.at(-1);
+        if (!payload.skipped && completedTurn?.synthesized_audio_duration_ms) payload.durationMs = completedTurn.synthesized_audio_duration_ms;
         completePlayback(conversation, payload);
         if (conversation.state === 'COMPLETED') await buildAudioExport(conversation);
         await persist(conversation);
         return send(response, 200, publicConversation(conversation));
       }
-      if (action === 'pause') { pause(conversation); await persist(conversation); return send(response, 200, publicConversation(conversation)); }
+      if (action === 'pause') { pause(conversation); invalidatePreparation(conversation.id); await persist(conversation); return send(response, 200, publicConversation(conversation)); }
       if (action === 'resume') { resume(conversation); await persist(conversation); return send(response, 200, publicConversation(conversation)); }
       if (action === 'stop') {
-        prefetches.delete(conversation.id);
+        invalidatePreparation(conversation.id);
         stop(conversation);
         if (conversation.transcript.some((turn) => turn.audio_file)) await buildAudioExport(conversation);
         await persist(conversation);
@@ -703,5 +812,5 @@ const server = http.createServer(async (request, response) => {
 
 await restoreConversations();
 server.listen(Number(process.env.PORT || 18770), process.env.HOST || '127.0.0.1', () => {
-  console.log(`Spoken conversation engine listening on http://${process.env.HOST || '127.0.0.1'}:${process.env.PORT || 18770}`);
+  console.log(`Spoken conversation engine listening on http://${process.env.HOST || '127.0.0.1'}:${server.address().port}`);
 });

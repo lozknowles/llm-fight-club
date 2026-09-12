@@ -1,5 +1,6 @@
 import { pcmS16leToWav } from './audio-format.js';
 import { controlAvailability } from './control-state.js';
+import { playbackDuration } from './playback-duration.js';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -20,6 +21,7 @@ let startedAt = 0;
 let settled = false;
 let completionWatch = null;
 let streamAbort = null;
+let playbackGeneration = 0;
 let activeSources = [];
 let scheduledEnd = 0;
 let streamComplete = false;
@@ -81,6 +83,7 @@ function responseMetrics(response, began) {
     provider: response.headers.get('x-tts-provider') || 'unknown',
     model: response.headers.get('x-tts-model') || 'unknown',
     fallback: response.headers.get('x-tts-fallback') === 'true',
+    audio_prefetched: response.headers.get('x-tts-prefetched') === 'true',
     attempts,
     response_headers_ms: Math.round(performance.now() - began),
     router_first_byte_ms: Number(response.headers.get('x-tts-first-byte-ms')) || null,
@@ -88,7 +91,7 @@ function responseMetrics(response, began) {
     first_decodable_ms: null,
     first_playable_ms: null,
     stream_complete_ms: null,
-    audio_duration_ms: null,
+    audio_duration_ms: Number(response.headers.get('x-tts-audio-duration-ms')) || null,
     model_load_ms: Number(response.headers.get('x-tts-load-ms')) || null,
     synthesis_ms: Number(response.headers.get('x-tts-generation-ms')) || null,
     real_time_factor: Number(response.headers.get('x-tts-rtf')) || null,
@@ -218,7 +221,7 @@ function speechBegan(turn) {
   render();
   reportInterruptionAudible(turn);
   startBargeMonitor(turn);
-  if (conversation?.id) api(`/api/conversations/${conversation.id}/prefetch`, 'POST', {}).catch(() => {});
+  if (conversation?.id) api(`/api/conversations/${conversation.id}/prefetch`, 'POST', { turnId: turn.turn_id }).catch(() => {});
 }
 
 function pcmFloats(bytes, carry) {
@@ -240,9 +243,9 @@ async function previewAudioBlob(response) {
   return new Blob([bytes], { type: response.headers.get('content-type') || 'audio/wav' });
 }
 
-async function streamPcm(response, began) {
+async function streamPcm(response, began, generation) {
   if (!audioContext) throw new Error('Web Audio is unavailable in this browser');
-  await audioContext.resume();
+  if (conversation?.state !== 'PAUSED') await audioContext.resume();
   const reader = response.body.getReader();
   let carry = new Uint8Array();
   let totalSamples = 0;
@@ -252,6 +255,7 @@ async function streamPcm(response, began) {
   activeSources = [];
   while (true) {
     const chunk = await reader.read();
+    if (generation !== playbackGeneration) { await reader.cancel(); return; }
     if (chunk.done) break;
     if (metrics.first_byte_ms == null) metrics.first_byte_ms = Math.round(performance.now() - began);
     const decoded = pcmFloats(chunk.value, carry);
@@ -285,11 +289,12 @@ async function streamPcm(response, began) {
   }, 25);
 }
 
-async function playContainer(response, began) {
+async function playContainer(response, began, generation, turnId) {
   const chunks = [];
   const reader = response.body.getReader();
   while (true) {
     const chunk = await reader.read();
+    if (generation !== playbackGeneration) { await reader.cancel(); return; }
     if (chunk.done) break;
     if (metrics.first_byte_ms == null) metrics.first_byte_ms = Math.round(performance.now() - began);
     chunks.push(chunk.value);
@@ -300,17 +305,18 @@ async function playContainer(response, began) {
   player.src = audioUrl;
   player.volume = 1;
   player.onplay = () => {
+    if (generation !== playbackGeneration || startedAt) return;
     startedAt = performance.now();
     metrics.first_playable_ms = Math.round(startedAt - began);
     metrics.inter_speaker_silence_ms = previousSpeechEndedAt == null ? null : Math.max(0, Math.round(startedAt - previousSpeechEndedAt));
     speechBegan(currentTurn);
   };
-  player.onended = () => finish(false);
+  player.onended = () => { if (generation === playbackGeneration) finish(false, turnId); };
   player.onerror = () => { $('#error').textContent = 'Audio playback failed'; };
-  await player.play();
+  if (conversation?.state !== 'PAUSED') await player.play();
 }
 
-async function speech(turn) {
+async function speech(turn, generation) {
   currentTurn = turn;
   if (speechGain) speechGain.gain.value = 1;
   const began = performance.now();
@@ -344,9 +350,10 @@ async function speech(turn) {
     clearTimeout(slowNotice);
   }
   if (!response.ok) throw new Error(`TTS ${response.status}: ${await response.text()}`);
+  if (generation !== playbackGeneration) { await response.body?.cancel(); return; }
   metrics = responseMetrics(response, began);
-  if (response.headers.get('x-audio-format') === 'pcm_s16le_24000_mono') await streamPcm(response, began);
-  else await playContainer(response, began);
+  if (response.headers.get('x-audio-format') === 'pcm_s16le_24000_mono') await streamPcm(response, began, generation);
+  else await playContainer(response, began, generation, turn.turn_id);
 }
 
 function roles() {
@@ -466,6 +473,8 @@ function escapeHtml(value) {
 }
 
 function stopAudio() {
+  playbackGeneration++;
+  player.onended = null; player.onplay = null; player.onerror = null;
   clearBargeMonitor();
   player.pause();
   if (streamAbort) streamAbort.abort();
@@ -476,20 +485,26 @@ function stopAudio() {
   activeSources = [];
 }
 
-async function finish(skipped = false) {
+async function finish(skipped = false, expectedTurnId = currentTurn?.turn_id) {
+  if (expectedTurnId !== currentTurn?.turn_id || (!skipped && !startedAt)) return;
   if (settled) return;
   settled = true;
   clearBargeMonitor();
   if (completionWatch) clearInterval(completionWatch);
   completionWatch = null;
   previousSpeechEndedAt = performance.now();
-  const durationMs = metrics.audio_duration_ms || Math.max(0, Math.round(previousSpeechEndedAt - startedAt));
+  const durationMs = playbackDuration({ skipped, started: Boolean(startedAt),
+    mediaDuration: Number.isFinite(player.duration) ? player.duration * 1000 : metrics.audio_duration_ms,
+    mediaPosition: Number.isFinite(player.currentTime) ? player.currentTime * 1000 : 0,
+    pcmDuration: metrics.audio_duration_ms });
+  player.onended = null;
   if (audioUrl) {
     URL.revokeObjectURL(audioUrl);
     audioUrl = null;
   }
   conversation = await api(`/api/conversations/${conversation.id}/complete-playback`, 'POST', {
     durationMs,
+    turnId: expectedTurnId,
     skipped,
     ttsProvider: metrics.provider,
     ttsLatencyMs: metrics.first_playable_ms,
@@ -500,17 +515,21 @@ async function finish(skipped = false) {
 }
 
 async function play(turn) {
+  stopAudio();
+  player.removeAttribute('src'); player.load();
+  const generation = playbackGeneration;
   if (completionWatch) clearInterval(completionWatch);
   completionWatch = null;
   settled = false;
   startedAt = 0;
   try {
-    await speech(turn);
+    await speech(turn, generation);
   } catch (error) {
-    if (error.name === 'AbortError') return;
+    if (error.name === 'AbortError' || generation !== playbackGeneration) return;
     stopAudio();
     $('#error').textContent = `${error.message}. Use “Skip speech” to continue.`;
     $('#status').textContent = `${conversation.format} · VOICE ERROR · ${conversation.transcript.length}/${conversation.turnLimit}`;
+    $('#retry').hidden = false;
   }
 }
 
@@ -521,6 +540,7 @@ async function next() {
   try {
     const result = await api(`/api/conversations/${conversation.id}/next`, 'POST', {});
     conversation = result.conversation;
+    currentTurn = result.turn;
     metrics = {};
     $('#error').textContent = '';
     render();
@@ -554,6 +574,7 @@ $('#setup').onsubmit = async (event) => {
       speechMode: 'server',
       outputMode: $('#outputMode').value,
       speechProfile,
+      delivery: $('#delivery').value,
       conversationHeat: selectedHeat(),
       interruptionAudio: $('#interruptionAudio').value,
       participants,
@@ -601,11 +622,12 @@ $('#pause').onclick = async () => {
 $('#resume').onclick = async () => {
   conversation = await api(`/api/conversations/${conversation.id}/resume`, 'POST', {});
   if (audioContext) await audioContext.resume();
-  if (player.src) await player.play();
+  if (conversation.awaitingPlayback && player.readyState >= 2 && !player.ended) await player.play();
+  if (currentTurn && startedAt) speechBegan(currentTurn);
   render();
 };
 $('#skip').onclick = () => { stopAudio(); finish(true); };
-$('#retry').onclick = () => next();
+$('#retry').onclick = () => conversation?.awaitingPlayback && currentTurn ? play(currentTurn) : next();
 $('#stop').onclick = async () => {
   stopAudio();
   settled = true;

@@ -1,5 +1,28 @@
 # Architecture
 
+## 1.2 spoken-turn and audio preparation boundary
+
+Model output passes through `spokenText` before recording, repetition/stance
+evaluation and TTS. Acting notes and own-name labels are presentation, not speech.
+`FixedOmniVoiceProvider` uses an allow-listed original-synthetic manifest, validates
+each representation hash/version and reuses the existing enrolment worker route.
+This avoids per-text voice redesign. The private manifest is never in Git.
+
+On audible-start, prefetch creates a snapshot-based text promise and a bounded
+audio-buffer promise (maximum 10 MB per response, at most 16 unconsumed preparations).
+Only current, revision-matching text may be committed after playback. The audio
+promise transfers to that committed turn and is consumed by its exact voice/text
+request. Enrolled-voice permission is rechecked before cached audio is served.
+No private reference data is in the audio cache or public catalogue.
+
+Human/model interruption, pause, stop, skip and heat updates invalidate cached work
+and abort the outbound request. Cancellation does not preempt computation already
+inside the shared worker. Such late results are discarded. No future speech is
+played or archived before its turn. A single in-flight next-turn operation prevents
+duplicate commits. Browser completion includes turn ID and a playback-generation
+guard; media duration replaces wall time. Provider substitution is refused before
+audio is forwarded. Existing authentication and worker processes remain unchanged.
+
 ## Optional Voice Lab boundary
 
 Version 1.1 adds an explicit, separately authenticated `fight-club` availability
