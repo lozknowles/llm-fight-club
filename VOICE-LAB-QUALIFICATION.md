@@ -3,12 +3,15 @@
 ## Implementation / branch
 
 Branch: `feature/voice-lab`, based on `c75ef36`.
+Implementation commit: `d4fb44a` (subsequent verification/hardening commits are on the same branch; use `git rev-parse HEAD` for the exact current head).
 Local isolated worktree: `work/llm-fight-club-voice-lab-20260912` in the current task workspace.
+Isolated hpubuntu checkout: `/fast/work/llm-fight-club-voice-lab-20260912`.
 The live checkout `/fast/work/llm-fight-club-omnivoice-final-20260906` was inspected read-only and remained at `c75ef36`.
 
 ## Automated and browser evidence
 
-- Node regression suite: 69 passing tests (54 existing, 15 Voice Lab additions).
+- Node regression suite: 69 passing tests on both MSI and hpubuntu (54 existing, 15 Voice Lab additions).
+- Python extension tests: reference format/length, bounded safe conditioning format, dedicated key and preservation of legacy handler routing. Run with the existing OmniVoice virtualenv, without loading its model.
 - JavaScript syntax checks for server, UI, video and AudioWorklet: passed.
 - Browser preview: localhost-only isolated Node process; ordinary/model worker URLs not used to generate anything.
 - Locked page rendered without JavaScript errors.
@@ -35,3 +38,5 @@ Artificial WAV signals and provider doubles in regression tests do not count as 
 | Merge / push / release / deployment | Not performed |
 
 The actual next gate is explicit controlled activation of the extension on the existing worker, preserving its original model and legacy routes. Then the operator must complete the consent, microphone, comparison and acceptance workflow. Do not promote this document to physical PASS based on unit tests.
+
+Post-test service observation: existing speech-pilot worker remained active, with zero systemd restarts and activation timestamp 5 September 2026 21:46:52 BST. No service unit or live source was changed. Both checkouts contain source only; no raw voice assets were added to Git.

@@ -106,6 +106,10 @@ class VoiceLabRuntime:
         return {'audio': base64.b64encode(buf.getvalue()).decode(), 'version': self.version,
                 'metrics': {'generation_ms': elapsed, 'duration_s': seconds, 'rtf': elapsed / 1000 / seconds,
                             'streaming': False, 'method': 'cached reference conditioning',
+                            'existing_worker_model_load_ms': self.ns.get('startup_ms'),
+                            'process_rss_bytes': self.ns['psutil'].Process().memory_info().rss,
+                            'cuda_allocated_bytes_after': torch.cuda.memory_allocated() if self.ns['args'].device.startswith('cuda') else None,
+                            'cuda_process_peak_bytes_since_worker_start': torch.cuda.max_memory_allocated() if self.ns['args'].device.startswith('cuda') else None,
                             'representation_sha256': hashlib.sha256(json.dumps(p, sort_keys=True).encode()).hexdigest()}}
 
 
