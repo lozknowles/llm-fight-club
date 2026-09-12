@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voice Lab — Spoken AI Studio</title>
+<link rel="stylesheet" href="voice-lab.css">
+<body><header><a href="audio.html">← Spoken AI Studio</a><h1>VOICE LAB</h1>
+<p>Your voice, with your permission. Record, compare, decide.</p>
+<p class="muted">Optional reference-audio conditioning — not model training. Synthetic speech is presentation, never proof of identity or authority.</p></header>
+<main>
+<section id="unlock"><h2>Private Voice Lab</h2><p>Use your separate Voice Lab access key. It stays in this tab’s memory, never in a URL or browser storage. Do not share it in chat.</p>
+<label>Access key <input type="password" id="accessKey" autocomplete="off"></label><button id="connect">Unlock</button></section>
+<p id="status" role="status" aria-live="polite">Locked. No microphone access or recording has started.</p>
+<section><h2>Optional demonstration video</h2><p>Choose <strong>only this application tab</strong> in the browser picker, and enable tab audio if offered. Never capture password managers, private tabs or credentials. Start after unlocking. No recording begins automatically.</p>
+<button id="startVideo" disabled>Start demonstration capture</button><button id="stopVideo" disabled>Stop and save video</button><p id="videoStatus" class="muted">Not recording. Unlock first. Requests 1920×1080; actual dimensions and audio availability will be reported. Screen capture is separate from microphone enrolment.</p></section>
+<div id="lab" hidden>
+<section><h2>Saved profiles</h2><label>Profile <select id="profiles"><option value="">Create a new profile</option></select></label>
+<button id="newProfile">New enrolment</button><button id="lock">Lock Voice Lab</button><p id="providerStatus" class="muted"></p></section>
+<section id="consent"><h2>VOICE CLONING CONSENT</h2>
+<p>This feature creates synthetic speech that can sound like the person whose voice is recorded.</p>
+<p>Only enrol your own voice, or a voice whose speaker has explicitly given permission to create and use a synthetic version. The resulting voice may say words the speaker never recorded. It must not be treated as evidence that the real person said, approved or authorised those words.</p>
+<p>Recordings and reusable profiles are sensitive personal material. They are stored privately for internal Fight Club announcement/commentary. You can delete them. They are not placed in public Git.</p>
+<label>Display name <input id="displayName" maxlength="60" placeholder="For example, Loz"></label>
+<label>Relationship <select id="relationship"><option value="">Choose…</option><option value="SELF">My own voice</option><option value="AUTHORISED_OTHER">Explicitly authorised by the speaker</option></select></label>
+<label class="check"><input id="permission" type="checkbox">I confirm that this is my voice OR I have explicit permission from the speaker to create and use this synthetic voice.</label>
+<label class="check"><input id="synthetic" type="checkbox">I understand that generated speech can contain words the real speaker never said.</label>
+<label class="check"><input id="purpose" type="checkbox">I agree to create the voice profile for the purposes described here.</label>
+<button id="continue" disabled>Continue to guided recording</button></section>
+<section id="profilePanel" hidden><h2 id="profileTitle"></h2><p id="profileState"></p>
+<p class="muted">Six varied takes are collected. OmniVoice uses one accepted reference, selected deterministically nearest eight seconds. More recordings are alternatives, not extra training.</p>
+<div id="recordPanel"><h3>Guided recording</h3>
+<label>Sample <select id="sampleIndex"></select></label><p id="prompt" class="prompt"></p>
+<button id="enableMic">Enable microphone</button><label>Microphone <select id="microphones"><option value="">System default</option></select></label>
+<label>Input level <meter id="meter" min="0" max="1" value="0"></meter></label>
+<p id="recordState">READY — microphone off</p>
+<button id="record" disabled>Record</button><button id="stopRecord" disabled>Stop recording</button>
+<button id="playTake" disabled>Play back take</button><button id="rerecord" disabled>Re-record</button>
+<p id="quality"></p><label class="check"><input id="confirmedText" type="checkbox">I have listened and confirm I read the displayed text accurately.</label>
+<button id="acceptSample" disabled>Accept sample</button><p id="progress"></p>
+<button id="build" disabled>Create reusable voice prompt</button></div>
+<div id="comparison" hidden><h3>Original / synthetic comparison</h3><p>These generated phrases were not in the enrolment prompts. Listen to both clips before deciding.</p>
+<button id="generateTest">Generate another test</button><p id="testText"></p>
+<button id="playOriginal" disabled>Play original</button><button id="playSynthetic" disabled>Play synthetic</button>
+<p>Does this sound sufficiently like the intended speaker?</p><button id="acceptVoice" disabled>ACCEPT VOICE</button><button id="reject">Reject voice</button></div>
+<div id="assignment" hidden><h3>Presentation role assignment</h3><p>Synthetic voice — authorised profile</p>
+<label class="check"><input type="checkbox" id="announcer">ANNOUNCER</label><label class="check"><input type="checkbox" id="commentator">COMMENTATOR</label>
+<label class="check"><input type="checkbox" id="publicationDisclosure" checked>Include synthetic disclosure in publication metadata</label>
+<button id="saveRoles">Save role assignment</button></div>
+<div class="actions"><button id="addSample">Add sample / replace a take</button><button id="requalify">Re-qualify</button><button id="reenrol">Re-enrol with fresh consent</button><button id="deleteVoice" class="danger">Delete voice and all its recordings</button></div>
+</section>
+<section id="bout" hidden><h2>Physical Fight Club qualification</h2><p>A real, short two-model debate. The accepted profile supplies announcement and commentary only. The models supply their own arguments; an LLM judge scores them. This is not an objective benchmark.</p>
+<label>Proposition <input id="boutPremise" value="Every town should have a free public library." maxlength="500"></label>
+<label>Competitor A model <select id="modelA"></select></label><label>Competitor B model <select id="modelB"></select></label>
+<button id="runBout">Start real qualification bout</button><button id="stopBout" disabled>Stop bout</button>
+<label>Save evidence summary <button id="exportBout" disabled>Download evidence JSON</button></label>
+<div id="boutLog" aria-live="polite"></div></section>
+</div></main><audio id="player" controls hidden></audio>
+<script type="module" src="voice-lab.js"></script><script type="module" src="voice-lab-video.js"></script></body></html>

@@ -1,5 +1,13 @@
 # LLM Fight Club / Spoken AI Studio
 
+## Optional Voice Lab (development branch; not deployed)
+
+Consent-driven guided enrolment, private reusable OmniVoice reference conditioning,
+original/synthetic comparisons, explicit operator acceptance and ANNOUNCER /
+COMMENTATOR presentation roles. Uses the existing installed OmniVoice capability;
+no second model installation or conventional training. See [VOICE-LAB.md](VOICE-LAB.md)
+for setup, security, storage/deletion, physical qualification and remaining gates.
+
 A general spoken multi-agent conversation engine. Debate was the first format; v0.3 also supports interview, panel and cross-examination formats with reusable personality profiles, compact character state, dynamic interviewer follow-ups, durable transcripts, browser-controlled audio sequencing and model-initiated barge-in.
 
 The intended experience is asynchronous generation followed by real-time listening: the user starts a programme, waits while each line is generated and synthesized, then hears it play at natural speed. Playback completion—not a timer—authorizes the next LLM turn.
@@ -14,7 +22,9 @@ The intended experience is asynchronous generation followed by real-time listeni
 - FFmpeg/Flite `awb`, `slt` and `rms` voices as an automatic fallback.
 - Persistent JSON/Markdown transcripts, per-turn WAV recordings, a stitched conversation MP3 and turn telemetry.
 
-The built-in natural performers are original synthetic characters. The application does not clone or imitate real people.
+The built-in natural performers are original synthetic characters. Optional Voice Lab
+enrolment supports only the operator's own or explicitly authorised voice through
+affirmative consent and acceptance; it is disabled by default.
 
 ## OmniVoice evaluation backend
 

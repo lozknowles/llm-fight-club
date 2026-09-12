@@ -1,5 +1,22 @@
 # Architecture
 
+## Optional Voice Lab boundary
+
+The Voice Lab HTTP API authenticates every profile, audio and role request with
+a dedicated header credential. `VoiceLab` owns consent, private assets, revisioned
+qualification and role permissions. Its provider-neutral adapter contract supports
+reference creation and synthesis. `OmniVoiceEnrolmentProvider` connects only to a
+loopback existing-worker extension; ConversationEngine has no model dependency.
+
+Permitted presentation role → accepted profile → provider adapter → existing
+OmniVoice model. A synthetic voice never becomes an authentication or Agent Control
+authority identity. Provider execution success and operator acceptance are separate.
+
+The optional worker startup wrapper preserves the existing source, legacy routes,
+single model and serialized request queue. It is not activated by default. See
+[VOICE-LAB.md](VOICE-LAB.md) for representation format, lifecycle, deployment gates,
+security limitations and physical evidence requirements.
+
 ```text
 Browser
   -> Conversation HTTP API

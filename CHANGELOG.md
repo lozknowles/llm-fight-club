@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-12 — Voice Lab (isolated development, physical qualification pending)
+
+- Added optional, consent-driven microphone enrolment with six guided categories,
+  up to six additional takes, input meter, local capture and server-side PCM quality checks.
+- Added provider-neutral private voice profiles, deterministic reference selection,
+  integrity hashes, A/B tests, explicit user acceptance, deletion and requalification.
+- Prepared a separately authenticated extension to the existing OmniVoice worker;
+  reuses its model and reference conditioning without fine-tuning or a second model load.
+- Added permitted announcer/commentator roles, synthetic disclosure, a real-bout
+  qualification runner and operator-started video capture with measured resolution.
+- Added security/state tests and physical qualification checklist. No user voice
+  recorded, no acceptance inferred, no live worker restarted, no deployment performed.
+
 ## 2026-09-06 — Optional OmniVoice provider
 
 - Added a provider-neutral OmniVoice adapter and persistent loopback synthesis service.
