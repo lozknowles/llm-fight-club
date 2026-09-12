@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-12 — Voice Lab unlock feedback
+
+- Replaced the ambiguous authorisation error with separate missing-key and rejected-key messages. Credentials are never echoed or logged; authentication remains fail-closed.
+- Verified on the private preview that the browser's entered key was received but rejected, while the saved MSI Voice Lab key authenticated successfully. No microphone capture or voice acceptance was performed.
+- Added regression checks for both errors and non-disclosure of submitted/configured keys.
+
 ## 2026-09-12 — Approved private Voice Lab browser access
 
 - Added only loopback destination 127.0.0.1:18891 to loz's explicitly approved SSH forwarding list, preserving existing entries and SSH port 2222.
