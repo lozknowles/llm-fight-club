@@ -41,6 +41,8 @@ if (process.argv.includes('--synthetic')) {
     originalMetrics: original.metrics, conditionedMetrics: cloned.metrics, physicalQualification: false };
   console.log(JSON.stringify(report.syntheticTest));
 }
+const priorReport = await fs.readFile(`${directory}/worker-verification.json`, 'utf8').then(JSON.parse, () => ({}));
+if (!report.syntheticTest && priorReport.syntheticTest) report.syntheticTest = { ...priorReport.syntheticTest, recorded_at: priorReport.syntheticTest.recorded_at || priorReport.at };
 await fs.writeFile(`${directory}/worker-verification.json`, JSON.stringify(report, null, 2), { mode: 0o600 });
 const activation = JSON.parse(await fs.readFile(`${directory}/activation.json`, 'utf8'));
 activation.status = 'WORKER_VERIFIED'; activation.verified_at = report.at;
