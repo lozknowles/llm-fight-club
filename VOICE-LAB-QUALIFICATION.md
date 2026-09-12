@@ -1,5 +1,15 @@
 # Voice Lab qualification evidence — 12 September 2026
 
+## Approved private browser access — 12 September
+
+Operator explicitly approved the one additional SSH forwarding destination and confirmed SSH uses **port 2222**. Effective policy for user loz is now local forwarding only, with `PermitOpen 127.0.0.1:4173 127.0.0.1:8766 127.0.0.1:18891`. No other destination or public listener was added.
+
+The exact pre-change policy was checked before modification and backed up at `/var/backups/49-loz-local-forwarding.before-voice-lab-20260912.conf`. `sshd -t` and effective-policy validation passed; SSH was reloaded, not restarted. Existing app, worker and SSH services remained active.
+
+An MSI loopback listener forwards `127.0.0.1:18891` over authenticated SSH **2222** to the same remote loopback port. Browser navigation to `http://127.0.0.1:18891/voice-lab.html` now succeeds. The page is left locked with no microphone or capture started. A separate authenticated API check through this tunnel returned the installed OmniVoice reference-conditioning capability and **zero enrolled profiles**.
+
+The owner access key is in an MSI local file restricted to MSI\\Loz and SYSTEM, not in source, chat, URL or browser storage. The user must unlock the page, tick their own consent, initiate Record and personally accept or reject the comparison. The earlier forwarding-block note below is retained as history and is now resolved.
+
 ## Approved private activation — 08:14 BST, 12 September
 
 The operator explicitly approved controlled restart of the existing shared OmniVoice worker. Added only a named service drop-in using the unchanged existing worker source, original virtualenv/model/state arguments, resource limits and existing authentication. No second model was loaded. Separate owner/worker keys were generated into owner-only private files, never Git or tool output.

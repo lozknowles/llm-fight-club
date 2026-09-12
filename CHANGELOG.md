@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-12 — Approved private Voice Lab browser access
+
+- Added only loopback destination 127.0.0.1:18891 to loz's explicitly approved SSH forwarding list, preserving existing entries and SSH port 2222.
+- Validated configuration, retained a recoverable backup and reloaded SSH without restarting it.
+- Verified Voice Lab browser access and authenticated installed-worker health through the MSI tunnel. Operator consent, microphone recording and likeness acceptance remain pending.
+
 ## 2026-09-12 — Approved private worker activation
 
 - Activated the optional enrolment extension on the existing shared OmniVoice worker after explicit operator approval; preserved original source/model/legacy routes and existing service limits.

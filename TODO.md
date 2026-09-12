@@ -10,7 +10,7 @@
 - [x] Automated mocked/unit regression tests and operator documentation.
 - [x] Operator approved controlled existing-worker extension activation on 12 September; live app/router stayed active.
 - [x] Verify real conditioning/synthesis using a new synthetic reference, legacy worker routes, separate auth and VRAM.
-- [ ] Approve one additional SSH PermitOpen destination (127.0.0.1:18891) to reach the private preview from MSI. Existing permitted ports are in use; no policy bypass or change performed.
+- [x] Operator approved and verified one additional SSH PermitOpen destination (127.0.0.1:18891) for loz. SSH stays on 2222; existing 4173/8766 destinations preserved. Private browser page and authenticated worker health verified from MSI.
 - [ ] Physically detect/use MSI microphone through consent/Record controls.
 - [ ] Loz records and evaluates original/synthetic comparison.
 - [ ] Loz personally clicks ACCEPT VOICE (not done).
