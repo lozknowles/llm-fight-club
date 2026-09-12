@@ -140,6 +140,13 @@ test('HTTP endpoints enforce auth for list, writes, audio and unknown paths; dis
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => new Promise(resolve => server.close(resolve)));
   const url = `http://127.0.0.1:${server.address().port}/api/voice-lab`;
   for (const route of ['/profiles', '/profiles/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/sample-0.wav', '/config']) assert.equal((await fetch(url + route)).status, 401);
+  assert.equal((await (await fetch(url + '/config')).json()).code, 'ACCESS_KEY_MISSING');
+  const invalid = await fetch(url + '/config', { headers: { 'x-voice-lab-key': 'wrong-key' } });
+  assert.equal(invalid.status, 401);
+  const invalidBody = await invalid.json();
+  assert.equal(invalidBody.code, 'ACCESS_KEY_INVALID');
+  assert.ok(!JSON.stringify(invalidBody).includes(key));
+  assert.ok(!JSON.stringify(invalidBody).includes('wrong-key'));
   assert.equal((await fetch(url + '/profiles', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(consent) })).status, 401);
   assert.equal((await fetch(url + '/config', { headers: { 'x-voice-lab-key': key, 'sec-fetch-site': 'cross-site' } })).status, 403);
   const response = await fetch(url + '/profiles', { headers: { 'x-voice-lab-key': key } }); assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'private, no-store');
