@@ -91,6 +91,27 @@ test('technical synthesis is not acceptance; current A/B reports plus explicit a
   q = await lab.accept(p.profile_id, { accept: true, test_id: testId }); assert.equal(q.user_acceptance, true); assert.ok(q.qualification_timestamp);
   for (const text of TEST_PHRASES) assert.ok(!PROMPTS.some(p => p.text === text));
 });
+test('custom sentence reaches the existing provider unchanged except surrounding whitespace and is stored with its audio', async t => {
+  const { lab, fake } = await fixture(t), p = await built(lab);
+  let requested;
+  fake.synthesize = async input => { requested = input.text; return { audio: wav(), version: 'fixture-v1' }; };
+  const text = 'Can we really hear this new sentence in my synthetic voice?';
+  const result = await lab.test(p.profile_id, `  ${text}  `);
+  assert.equal(requested, text); assert.equal(result.tests.at(-1).text, text);
+  assert.equal(result.user_acceptance, false);
+  for (const invalid of [null, 123, {}, 'a'.repeat(501), 'bad\x00text']) await assert.rejects(lab.test(p.profile_id, invalid), /plain text/);
+  const fallback = await lab.test(p.profile_id, '   ');
+  assert.equal(fallback.tests.at(-1).text, TEST_PHRASES[1]);
+});
+test('accepted profiles can preview custom speech without changing acceptance evidence or roles', async t => {
+  const { lab } = await fixture(t), p = await accepted(lab);
+  await lab.roles(p.profile_id, ['ANNOUNCER']);
+  const preview = await lab.test(p.profile_id, 'Another private voice preview.');
+  assert.equal(preview.qualification_status, 'ACCEPTED'); assert.equal(preview.user_acceptance, true);
+  assert.equal(preview.accepted_test_id, p.accepted_test_id); assert.deepEqual(preview.approved_roles, ['ANNOUNCER']);
+  assert.equal(preview.tests.at(-1).heard_synthetic, false);
+  await lab.heard(p.profile_id, preview.tests.at(-1).id, 'synthetic');
+});
 test('role speech is presentation-only with synthetic disclosure and protected stored audio', async t => {
   const { lab } = await fixture(t), p = await accepted(lab);
   await assert.rejects(lab.roles(p.profile_id, ['AGENT_CONTROL_OPERATOR']), /Only ANNOUNCER/);

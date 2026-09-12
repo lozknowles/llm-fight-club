@@ -14,6 +14,9 @@ Nothing records automatically. Existing recorded six-prompt profiles retain thei
 **Accept and save recording** is the save action; the checkbox alone does not save.
 An unsaved take blocks moving on until it is saved or explicitly discarded. The
 count labelled SAVED ON SERVER reflects successful server responses, not prompt numbers.
+After creating the voice prompt, enter up to 500 characters and click **Generate voice**,
+then **Play synthetic**. Blank input uses a suggested sentence. This also works for an
+already accepted profile without requiring re-enrolment or changing its acceptance.
 
 A general spoken multi-agent conversation engine. Debate was the first format; v0.3 also supports interview, panel and cross-examination formats with reusable personality profiles, compact character state, dynamic interviewer follow-ups, durable transcripts, browser-controlled audio sequencing and model-initiated barge-in.
 

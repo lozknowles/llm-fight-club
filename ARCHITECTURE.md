@@ -18,6 +18,10 @@ An unsaved browser take is retained on upload failure and blocks prompt changes,
 new capture and profile transitions. A save receipt/count is set only after the
 server responds successfully. Reopening recording invalidates qualification, not
 sample acceptance, and is rejected when the profile is already recording.
+The authenticated test route accepts optional plain-text `text` (maximum 500
+characters), validates it before synthesis and stores it with the test audio.
+Accepted-profile previews preserve the original accepted-test ID and approved
+roles; generating a new preview does not constitute a new likeness acceptance.
 
 Permitted presentation role → accepted profile → provider adapter → existing
 OmniVoice model. A synthetic voice never becomes an authentication or Agent Control

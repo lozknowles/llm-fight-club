@@ -39,7 +39,7 @@ function render() {
   $('profileTitle').textContent = `${profile.display_name} — Voice profile`;
   $('profileState').textContent = `${state} · ${profile.profile_id} · ${profile.user_acceptance ? 'Explicitly accepted by the operator' : 'NOT accepted for use'}`;
   $('recordPanel').hidden = state !== 'RECORDING';
-  $('comparison').hidden = !['UNQUALIFIED', 'TESTED'].includes(state);
+  $('comparison').hidden = !['UNQUALIFIED', 'TESTED', 'ACCEPTED'].includes(state);
   $('assignment').hidden = state !== 'ACCEPTED';
   $('bout').hidden = state !== 'ACCEPTED' || !['ANNOUNCER', 'COMMENTATOR'].every(r => profile.approved_roles.includes(r));
   const prompts = guide(), current = prompts[sampleIndex % prompts.length];
@@ -70,9 +70,12 @@ function render() {
   $('confirmedText').disabled = busy || recording || !take;
   $('build').disabled = busy || recording || Boolean(take) || !prompts.every(p => profile.samples.some(s => s.index === p.index));
   const t = profile.tests.at(-1);
-  $('testText').textContent = t?.text || 'Create a synthetic test to begin comparison.';
+  $('testText').textContent = t ? `Generated speech: ${t.text}` : 'No synthetic audio yet. Enter a sentence and click Generate voice, then use Play synthetic below.';
+  $('customTestText').disabled = busy || recording;
+  $('testTextCount').textContent = `${$('customTestText').value.length} / 500 characters`;
   for (const id of ['playOriginal', 'playSynthetic']) $(id).disabled = busy || !t;
   $('acceptVoice').disabled = busy || !canAcceptVoice(profile);
+  $('acceptVoice').textContent = state === 'ACCEPTED' ? 'Voice already accepted' : 'ACCEPT VOICE';
   for (const id of ['generateTest', 'reject', 'saveRoles', 'addSample', 'requalify', 'reenrol', 'deleteVoice', 'runBout']) $(id).disabled = busy || recording || Boolean(take);
   $('addSample').hidden = state === 'RECORDING';
   $('addSample').disabled ||= state === 'RECORDING';
@@ -197,7 +200,17 @@ $('nextSentence').onclick = () => {
   status(`Sentence ${sampleIndex + 1} of ${guide().length} is ready. Enable your microphone and press Record when you are ready; nothing starts automatically.`);
 };
 $('build').onclick = () => action(async () => { await micOff(); status('Creating a reusable reference prompt. Model weights are not being trained.'); profile = await post('build'); await refreshProfiles(); status('Prompt created, but voice is NOT accepted. Generate and listen to a comparison.'); });
-$('generateTest').onclick = () => action(async () => { status('Generating new speech from the saved reference prompt…'); profile = await post('test'); status('Test generated. Listen to the original AND synthetic clip, then decide for yourself.'); });
+$('customTestText').oninput = render;
+$('generateTest').onclick = () => action(async () => {
+  const text = $('customTestText').value;
+  if (text.length > 500) throw Error('Please use at most 500 characters.');
+  stopPlayer(); $('generateTest').textContent = 'Generating voice…';
+  status('Generating your sentence with the saved voice reference…');
+  try {
+    profile = await post('test', { text });
+    status(profile.qualification_status === 'ACCEPTED' ? 'Speech ready. Click Play synthetic. Your existing voice acceptance is unchanged.' : 'Speech ready. Click Play synthetic, then Play original to compare before accepting the voice.');
+  } finally { $('generateTest').textContent = 'Generate voice'; }
+});
 for (const [button, kind] of [['playOriginal', 'original'], ['playSynthetic', 'synthetic']]) $(button).onclick = () => action(async () => {
   const p = profile, t = p.tests.at(-1), asset = kind === 'original' ? `sample-${p.selected_sample}.wav` : `test-${t.id}.wav`;
   const blob = await api(`/profiles/${p.profile_id}/${asset}`);

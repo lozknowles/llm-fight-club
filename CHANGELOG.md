@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-12 — Enter a sentence and Generate voice
+
+- Added a 500-character sentence box and counter to the original/synthetic comparison, with the requested Generate voice label. Blank input still uses a suggested phrase.
+- The existing authenticated test endpoint forwards validated plain text to the existing OmniVoice profile and stores that exact text with the generated audio. No second provider/model is introduced.
+- Accepted profiles can also generate previews without changing their accepted reference, acceptance evidence or role assignments. New/unqualified profiles still require both listening reports and explicit acceptance.
+- Tests cover custom-text propagation, bounds, invalid input, fallback text, UI label/playback readiness and preservation of prior acceptance. Real custom-sentence listening is left to the operator.
+
 ## 2026-09-12 — Explicit recording save and adjacent guide
 
 - Rename Accept sample to Accept and save recording, show UNSAVED/NOT SAVED inline, and report the server-returned saved count after success. Failed saves retain the take and do not advance.

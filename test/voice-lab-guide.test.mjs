@@ -58,6 +58,14 @@ test('actual UI save handler waits for Ready, keeps consent manual, and never st
   }
   assert.equal(get('nextSentence').hidden, true); assert.equal(get('build').disabled, false);
   assert.match(get('status').textContent, /All 4 sentences saved/);
+  vm.runInContext(`profile.qualification_status = 'UNQUALIFIED';
+    $('customTestText').value = 'Read this particular sentence, please.';
+    api = async (route, method, value) => { globalThis.requestedText = value.text; return {...profile, qualification_status: 'TESTED', tests: [{text: value.text}]}; };`, sandbox);
+  await vm.runInContext(`$('generateTest').onclick()`, sandbox);
+  assert.equal(sandbox.requestedText, 'Read this particular sentence, please.');
+  assert.equal(get('generateTest').textContent, 'Generate voice');
+  assert.equal(get('playSynthetic').disabled, false);
+  assert.match(get('testText').textContent, /Read this particular sentence/);
 });
 
 test('read-aloud text and controls are adjacent, with progress immediately beneath them', async () => {

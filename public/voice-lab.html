@@ -46,8 +46,12 @@
 <div id="guideReview"><h3>Guided recording progress</h3><ol id="guideSteps" aria-label="Recording progress"></ol>
 <details><summary>Choose a sentence to revisit or an optional retake</summary><label>Sample <select id="sampleIndex"></select></label></details></div>
 <button id="build" disabled>Create reusable voice prompt</button></div>
-<div id="comparison" hidden><h3>Original / synthetic comparison</h3><p>These generated phrases were not in the enrolment prompts. Listen to both clips before deciding.</p>
-<button id="generateTest">Generate another test</button><p id="testText"></p>
+<div id="comparison" hidden><h3>Try your voice — original / synthetic comparison</h3><p>Type a sentence to hear it spoken with your voice reference. This is newly generated synthetic speech, not a recording of you saying it.</p>
+<label for="customTestText">Sentence to read in your synthetic voice</label>
+<textarea id="customTestText" rows="3" maxlength="500" placeholder="For example: Welcome to the programme. Today we have a rather surprising question for our guests." aria-describedby="customTestHelp testTextCount"></textarea>
+<p id="customTestHelp" class="muted">Up to 500 characters. Leave blank to use a suggested test sentence. Try wording you did not record, then compare the original and synthetic clips.</p>
+<p id="testTextCount" class="muted">0 / 500 characters</p>
+<button id="generateTest">Generate voice</button><p id="testText" aria-live="polite"></p>
 <button id="playOriginal" disabled>Play original</button><button id="playSynthetic" disabled>Play synthetic</button>
 <p>Does this sound sufficiently like the intended speaker?</p><button id="acceptVoice" disabled>ACCEPT VOICE</button><button id="reject">Reject voice</button></div>
 <div id="assignment" hidden><h3>Presentation role assignment</h3><p>Synthetic voice — authorised profile</p>
