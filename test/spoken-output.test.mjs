@@ -5,6 +5,7 @@ import { playbackDuration } from '../public/playback-duration.js';
 
 test('spoken output removes labels and posture without removing ordinary qualifications', () => {
   assert.equal(spokenText('Cedric Pump (staring at the ceiling, shrugging): Ah, that is wrong.', 'Cedric Pump'), 'Ah, that is wrong.');
+  assert.equal(spokenText('Cedric Pump (against): While your argument has merit, it overlooks the cost.', 'Cedric Pump'), 'While your argument has merit, it overlooks the cost.');
   assert.equal(spokenText('**Cedric Pump:** [sighs] Are you kidding me? *shakes his head* No.', 'Cedric Pump'), 'Are you kidding me? No.');
   assert.equal(spokenText('It cost five pounds (including tax).', 'Cedric Pump'), 'It cost five pounds (including tax).');
   assert.equal(spokenText('<think>Private notes</think>Guest: Yes.', 'Cedric Pump'), 'Yes.');

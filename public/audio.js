@@ -274,6 +274,7 @@ async function streamPcm(response, began, generation) {
     totalSamples += decoded.samples.length;
     if (!firstScheduled) {
       firstScheduled = true;
+      metrics.pcm_started_at = startAt;
       const untilStartMs = Math.max(0, (startAt - audioContext.currentTime) * 1000);
       metrics.first_playable_ms = Math.round(performance.now() - began + untilStartMs);
       startedAt = performance.now() + untilStartMs;
@@ -495,7 +496,7 @@ async function finish(skipped = false, expectedTurnId = currentTurn?.turn_id) {
   previousSpeechEndedAt = performance.now();
   const durationMs = playbackDuration({ skipped, started: Boolean(startedAt),
     mediaDuration: Number.isFinite(player.duration) ? player.duration * 1000 : metrics.audio_duration_ms,
-    mediaPosition: Number.isFinite(player.currentTime) ? player.currentTime * 1000 : 0,
+    mediaPosition: Number.isFinite(metrics.pcm_started_at) ? Math.max(0, (audioContext.currentTime - metrics.pcm_started_at) * 1000) : Number.isFinite(player.currentTime) ? player.currentTime * 1000 : 0,
     pcmDuration: metrics.audio_duration_ms });
   player.onended = null;
   if (audioUrl) {
