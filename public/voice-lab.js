@@ -1,4 +1,5 @@
 import { consentReady, canRecord, canAcceptVoice } from './voice-lab-state.js';
+import { captureConstraints, captureDescription } from './voice-lab-capture.js';
 const $ = id => document.getElementById(id), base = new URL('.', location.href);
 let key = '', config, profile, profiles = [], busy = false, recording = false, stream, context, recorder, analyser, chunks = [], take, quality;
 let started = 0, frame, audioUrl, sampleIndex = 0, boutCancelled = false, boutEvidence = null, activeConversation;
@@ -39,6 +40,8 @@ function render() {
   $('enableMic').disabled = busy || recording;
   $('sampleIndex').disabled = busy || recording;
   $('microphones').disabled = busy || recording;
+  $('captureMode').disabled = busy || recording;
+  $('disableMic').disabled = busy || recording || !stream;
   $('playTake').disabled = busy || recording || !take;
   $('rerecord').disabled = busy || recording || !take;
   $('acceptSample').disabled = busy || recording || !quality?.good || !$('confirmedText').checked;
@@ -61,6 +64,7 @@ async function micOff() {
   stream?.getTracks().forEach(t => t.stop()); stream = null;
   await context?.close().catch(() => {}); context = null; recorder = null;
   $('meter').value = 0; $('recordState').textContent = 'READY — microphone off'; $('recordState').className = '';
+  $('inputDb').textContent = 'Microphone off. Bar colour is not a recording-quality verdict.';
 }
 function stopPlayer() { $('player').pause(); $('player').onended = null; if (audioUrl) URL.revokeObjectURL(audioUrl); audioUrl = null; $('player').removeAttribute('src'); }
 async function play(blob, ended) {
@@ -73,7 +77,9 @@ async function enableMic() {
   await micOff();
   try {
     const device = $('microphones').value;
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: device ? { exact: device } : undefined, channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    stopPlayer();
+    stream = await navigator.mediaDevices.getUserMedia(captureConstraints(device, $('captureMode').value));
+    $('captureSettings').textContent = captureDescription(stream.getAudioTracks()[0]);
     context = new AudioContext(); await context.resume();
     await context.audioWorklet.addModule(new URL('voice-recorder-worklet.js', base));
     const source = context.createMediaStreamSource(stream); analyser = context.createAnalyser(); analyser.fftSize = 512;
@@ -86,7 +92,9 @@ async function enableMic() {
     const meter = () => {
       if (!stream) return;
       const samples = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(samples);
-      $('meter').value = Math.min(1, Math.sqrt(samples.reduce((a, v) => a + v * v, 0) / samples.length) * 5);
+      const rms = Math.sqrt(samples.reduce((a, v) => a + v * v, 0) / samples.length);
+      $('meter').value = Math.min(1, rms * 5);
+      $('inputDb').textContent = `${(20 * Math.log10(Math.max(rms, 1e-6))).toFixed(0)} dBFS RMS · bar magnified 5× for visibility, not microphone gain. Green does not mean noise-free.`;
       $('recordState').textContent = recording ? `● RECORDING · ${((performance.now() - started) / 1000).toFixed(1)} / 15 seconds` : 'READY — input monitoring only; press Record to capture';
       frame = requestAnimationFrame(meter);
     }; meter();
@@ -114,7 +122,7 @@ async function finishRecording() {
     view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 24000, true); view.setUint32(28, 48000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); str(36, 'data'); view.setUint32(40, rendered.length * 2, true);
     rendered.forEach((v, i) => view.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, v)) * 32767), true));
     take = new Blob([wav], { type: 'audio/wav' }); quality = await post('quality', { audio: await toBase64(take) });
-    $('quality').textContent = `${quality.good ? 'GOOD' : quality.issues.join(' · ')} · ${quality.duration.toFixed(1)} seconds · RMS ${quality.rmsDb.toFixed(1)} dBFS · ${(quality.silenceFraction * 100).toFixed(0)}% low-energy frames. ${quality.limitations}`;
+    $('quality').textContent = `${quality.good ? 'LEVEL CHECKS PASSED — listen for background noise before accepting' : quality.issues.join(' · ')} · ${quality.duration.toFixed(1)} seconds · RMS ${quality.rmsDb.toFixed(1)} dBFS · ${(quality.silenceFraction * 100).toFixed(0)}% low-energy frames. ${quality.limitations}`;
     status('Recording stopped and microphone released. Listen to your take before accepting it.');
   });
 }
@@ -138,6 +146,8 @@ $('newProfile').onclick = async () => { await micOff(); stopPlayer(); profile = 
 $('profiles').onchange = () => action(async () => { await micOff(); stopPlayer(); profile = $('profiles').value ? await api(`/profiles/${$('profiles').value}`) : null; clearConsent(); resetTake(); if (profile) { $('announcer').checked = profile.approved_roles.includes('ANNOUNCER'); $('commentator').checked = profile.approved_roles.includes('COMMENTATOR'); $('publicationDisclosure').checked = profile.publication_disclosure; } });
 $('sampleIndex').onchange = () => { sampleIndex = Number($('sampleIndex').value); resetTake(); };
 $('enableMic').onclick = () => action(enableMic);
+$('disableMic').onclick = () => action(async () => { await micOff(); status('Microphone off. Existing take retained.'); });
+$('captureMode').onchange = () => action(async () => { await micOff(); status('Capture mode changed. Press Enable microphone to apply it; existing take is unchanged.'); });
 $('microphones').onchange = () => action(enableMic);
 $('record').onclick = startRecording; $('stopRecord').onclick = finishRecording;
 $('playTake').onclick = () => action(() => play(take));

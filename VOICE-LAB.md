@@ -4,6 +4,14 @@ Status: isolated development feature. Operator approved private qualification ac
 
 ## Actual installed OmniVoice
 
+### Noisy input troubleshooting (12 September 2026)
+
+New recordings default to Speech cleanup: browser noise suppression and echo cancellation requested, automatic gain disabled. Raw capture remains available for a quiet studio. The UI reports actual processing settings (or not reported), so requested support is not presented as verified support. Mode changes release the microphone and require an explicit Enable microphone action.
+
+The meter displays all signal, not just speech; its bar is magnified fivefold for visibility without altering recorded samples. RMS dBFS is also displayed. Level checks cannot distinguish noise from speech. Listen before accepting: if background noise buries the voice, compare the selected USB microphone with the built-in array, use headphones and speak close to the mic. Do not accept a noisy reference or try to fix it merely by boosting everything.
+
+Original-recording noise was reported during operator testing. Capture changes passed software regressions but still require a fresh physical listening test; existing recordings and consent are unchanged.
+
 Read-only inspection on hpubuntu, 12 September 2026:
 
 - Existing editable package: `/fast/work/omnivoice-social-voice-20260905`, version **0.2.1**.

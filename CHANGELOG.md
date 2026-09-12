@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-12 — Noisy microphone capture troubleshooting
+
+- Default new captures to browser speech cleanup (noise suppression and echo cancellation), with raw studio capture still selectable. Automatic gain stays off to avoid raising noise alongside faint speech.
+- Show the selected input and actual processing settings reported by the browser; add an explicit microphone-off button. Changing cleanup mode stops monitoring and requires Enable microphone again.
+- Explain the magnified input meter, display RMS dBFS, and replace the misleading GOOD verdict with level-check-only wording and an explicit clear-voice listening confirmation.
+- Regression-tested worklet sample preservation and processing selection. Real microphone noise reduction still requires an operator-recorded comparison; no existing samples are modified.
+
 ## 2026-09-12 — Voice Lab unlock feedback
 
 - Replaced the ambiguous authorisation error with separate missing-key and rejected-key messages. Credentials are never echoed or logged; authentication remains fail-closed.

@@ -28,12 +28,16 @@
 <p class="muted">Six varied takes are collected. OmniVoice uses one accepted reference, selected deterministically nearest eight seconds. More recordings are alternatives, not extra training.</p>
 <div id="recordPanel"><h3>Guided recording</h3>
 <label>Sample <select id="sampleIndex"></select></label><p id="prompt" class="prompt"></p>
-<button id="enableMic">Enable microphone</button><label>Microphone <select id="microphones"><option value="">System default</option></select></label>
-<label>Input level <meter id="meter" min="0" max="1" value="0"></meter></label>
+<button id="enableMic">Enable microphone</button><button id="disableMic" disabled>Turn microphone off</button><label>Microphone <select id="microphones"><option value="">System default</option></select></label>
+<label>Recording processing <select id="captureMode"><option value="speech">Speech cleanup — noise suppression + echo cancellation</option><option value="raw">Raw — quiet room / studio microphone only</option></select></label>
+<p id="captureSettings" class="muted">Actual input and browser processing settings will appear after you enable the microphone.</p>
+<p class="muted">Use headphones and speak close to the selected microphone. If your voice is faint beneath noise, check the input device before increasing its gain. Speech cleanup depends on browser support and cannot repair a faulty or distant microphone. Do not accept a noisy take.</p>
+<label>Input signal — includes background noise <meter id="meter" min="0" max="1" value="0"></meter></label>
+<p id="inputDb" class="muted">Microphone off. Bar colour is not a recording-quality verdict.</p>
 <p id="recordState">READY — microphone off</p>
 <button id="record" disabled>Record</button><button id="stopRecord" disabled>Stop recording</button>
 <button id="playTake" disabled>Play back take</button><button id="rerecord" disabled>Re-record</button>
-<p id="quality"></p><label class="check"><input id="confirmedText" type="checkbox">I have listened and confirm I read the displayed text accurately.</label>
+<p id="quality"></p><label class="check"><input id="confirmedText" type="checkbox">I have listened: my voice is clear above background noise, and I read the displayed text accurately.</label>
 <button id="acceptSample" disabled>Accept sample</button><p id="progress"></p>
 <button id="build" disabled>Create reusable voice prompt</button></div>
 <div id="comparison" hidden><h3>Original / synthetic comparison</h3><p>These generated phrases were not in the enrolment prompts. Listen to both clips before deciding.</p>
