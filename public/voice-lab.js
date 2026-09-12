@@ -4,9 +4,10 @@ const $ = id => document.getElementById(id), base = new URL('.', location.href);
 let key = '', config, profile, profiles = [], busy = false, recording = false, stream, context, recorder, analyser, chunks = [], take, quality;
 let started = 0, frame, audioUrl, sampleIndex = 0, boutCancelled = false, boutEvidence = null, activeConversation;
 let pendingNext = null;
+let takeError = '', saveReceipt = '';
 const guide = () => profile?.recording_prompts || config.prompts;
 function selectGuide() {
-  const prompts = guide(); pendingNext = null;
+  const prompts = guide(); pendingNext = null; saveReceipt = ''; takeError = '';
   sampleIndex = profile ? nextSentence(profile) ?? 0 : 0;
   $('sampleIndex').replaceChildren(...Array.from({ length: prompts.length * 2 }, (_, i) => new Option(`${i + 1}. ${prompts[i % prompts.length].category}${i >= prompts.length ? ' — optional retake' : ''}`, i)));
   $('sampleIndex').value = String(sampleIndex);
@@ -32,7 +33,7 @@ function clearConsent() { for (const id of ['permission', 'synthetic', 'purpose'
 function render() {
   $('continue').disabled = busy || !consentReady({ permission: $('permission').checked, synthetic: $('synthetic').checked, purpose: $('purpose').checked, relationship: $('relationship').value, name: $('displayName').value });
   $('consent').hidden = Boolean(profile); $('profilePanel').hidden = !profile;
-  $('profiles').disabled = busy || recording; $('newProfile').disabled = busy || recording;
+  $('profiles').disabled = busy || recording || Boolean(take); $('newProfile').disabled = busy || recording || Boolean(take);
   if (!profile) { $('bout').hidden = true; return; }
   const state = profile.qualification_status;
   $('profileTitle').textContent = `${profile.display_name} — Voice profile`;
@@ -50,30 +51,34 @@ function render() {
     li.textContent = `${saved ? '✓ Saved' : 'To record'} — ${p.category}`; return li;
   }));
   const savedCount = prompts.filter(p => profile.samples.some(s => s.index === p.index)).length;
-  $('progress').textContent = `${savedCount} of ${prompts.length} required sentences saved · ${profile.samples.length} total takes`;
+  $('progress').textContent = `SAVED ON SERVER: ${savedCount} of ${prompts.length} required sentences · ${profile.samples.length} recordings saved`;
+  $('takeStatus').textContent = takeError || (take ? 'UNSAVED recording — play it back, confirm the text, then click Accept and save recording. Moving on is blocked until you save or explicitly discard it.' : saveReceipt || 'No unsaved recording.');
   $('nextSentence').hidden = pendingNext === null;
   $('nextSentence').disabled = busy || recording;
   $('nextSentence').textContent = `Ready for sentence ${(pendingNext ?? 0) + 1}`;
   $('guideNote').textContent = prompts.length === 4 ? 'Four contrasting sentences, recorded one at a time. Read only the large text; delivery hints are not spoken.' : 'This profile keeps its original six-sentence guide to preserve existing recordings. A new enrolment uses four sentences.';
-  $('record').disabled = pendingNext !== null || !canRecord({ state, microphone: Boolean(stream), recording, busy });
+  $('record').disabled = Boolean(take) || pendingNext !== null || !canRecord({ state, microphone: Boolean(stream), recording, busy });
   $('stopRecord').disabled = !recording;
   $('enableMic').disabled = busy || recording || pendingNext !== null;
-  $('sampleIndex').disabled = busy || recording;
+  $('sampleIndex').disabled = busy || recording || Boolean(take);
   $('microphones').disabled = busy || recording;
   $('captureMode').disabled = busy || recording;
   $('disableMic').disabled = busy || recording || !stream;
   $('playTake').disabled = busy || recording || !take;
   $('rerecord').disabled = busy || recording || !take;
   $('acceptSample').disabled = busy || recording || !quality?.good || !$('confirmedText').checked;
-  $('build').disabled = busy || recording || !prompts.every(p => profile.samples.some(s => s.index === p.index));
+  $('confirmedText').disabled = busy || recording || !take;
+  $('build').disabled = busy || recording || Boolean(take) || !prompts.every(p => profile.samples.some(s => s.index === p.index));
   const t = profile.tests.at(-1);
   $('testText').textContent = t?.text || 'Create a synthetic test to begin comparison.';
   for (const id of ['playOriginal', 'playSynthetic']) $(id).disabled = busy || !t;
   $('acceptVoice').disabled = busy || !canAcceptVoice(profile);
-  for (const id of ['generateTest', 'reject', 'saveRoles', 'addSample', 'requalify', 'reenrol', 'deleteVoice', 'runBout']) $(id).disabled = busy || recording;
+  for (const id of ['generateTest', 'reject', 'saveRoles', 'addSample', 'requalify', 'reenrol', 'deleteVoice', 'runBout']) $(id).disabled = busy || recording || Boolean(take);
+  $('addSample').hidden = state === 'RECORDING';
+  $('addSample').disabled ||= state === 'RECORDING';
   $('requalify').disabled ||= !profile.voice_representation_hash;
 }
-function resetTake() { take = null; quality = null; chunks = []; $('confirmedText').checked = false; $('quality').textContent = ''; render(); }
+function resetTake() { take = null; quality = null; chunks = []; takeError = ''; $('confirmedText').checked = false; $('quality').textContent = ''; render(); }
 async function refreshProfiles() {
   profiles = await api('/profiles'); $('profiles').replaceChildren(new Option('Create a new profile', ''));
   for (const p of profiles) $('profiles').add(new Option(`${p.display_name} · ${p.qualification_status}`, p.profile_id));
@@ -123,9 +128,9 @@ async function enableMic() {
   } catch (error) { await micOff(); throw Error(`Microphone unavailable: ${error.message}`); }
 }
 function startRecording() {
-  if (pendingNext !== null) return;
+  if (take || pendingNext !== null) return;
   if (!canRecord({ state: profile?.qualification_status, microphone: Boolean(stream), recording, busy })) return;
-  stopPlayer(); resetTake(); recording = true; started = performance.now(); recorder.port.postMessage('record'); $('recordState').className = 'active'; render();
+  stopPlayer(); saveReceipt = ''; resetTake(); recording = true; started = performance.now(); recorder.port.postMessage('record'); $('recordState').className = 'active'; render();
 }
 async function finishRecording() {
   if (!recording) return;
@@ -163,18 +168,22 @@ $('continue').onclick = () => action(async () => {
     relationship: $('relationship').value, permission: $('permission').checked, synthetic: $('synthetic').checked, purpose: $('purpose').checked });
   selectGuide(); await refreshProfiles(); status('Sentence 1 is ready below. Read the delivery hint, enable your microphone, then press Record when ready.');
 });
-$('newProfile').onclick = async () => { await micOff(); stopPlayer(); profile = null; clearConsent(); resetTake(); $('bout').hidden = true; render(); };
+$('newProfile').onclick = async () => { if (take || recording || busy) return; await micOff(); stopPlayer(); profile = null; clearConsent(); resetTake(); $('bout').hidden = true; render(); };
 $('profiles').onchange = () => action(async () => { await micOff(); stopPlayer(); profile = $('profiles').value ? await api(`/profiles/${$('profiles').value}`) : null; selectGuide(); clearConsent(); resetTake(); if (profile) { $('announcer').checked = profile.approved_roles.includes('ANNOUNCER'); $('commentator').checked = profile.approved_roles.includes('COMMENTATOR'); $('publicationDisclosure').checked = profile.publication_disclosure; } });
-$('sampleIndex').onchange = () => action(async () => { await micOff(); stopPlayer(); pendingNext = null; sampleIndex = Number($('sampleIndex').value); resetTake(); status('Sentence selected. Enable your microphone, then press Record when ready.'); });
+$('sampleIndex').onchange = () => action(async () => { if (take) { $('sampleIndex').value = String(sampleIndex); return; } await micOff(); stopPlayer(); pendingNext = null; saveReceipt = ''; sampleIndex = Number($('sampleIndex').value); resetTake(); status('Sentence selected. Enable your microphone, then press Record when ready.'); });
 $('enableMic').onclick = () => action(enableMic);
 $('disableMic').onclick = () => action(async () => { await micOff(); status('Microphone off. Existing take retained.'); });
 $('captureMode').onchange = () => action(async () => { await micOff(); status('Capture mode changed. Press Enable microphone to apply it; existing take is unchanged.'); });
 $('microphones').onchange = () => action(enableMic);
 $('record').onclick = startRecording; $('stopRecord').onclick = finishRecording;
 $('playTake').onclick = () => action(() => play(take));
-$('rerecord').onclick = () => { resetTake(); status('Take discarded from this tab. Enable the microphone and press Record for a new take.'); };
+$('rerecord').onclick = () => { if (busy || recording || !take || !confirm('Discard this unsaved recording? It will not be saved.')) return; stopPlayer(); saveReceipt = ''; resetTake(); status('Unsaved take discarded. Saved recordings are unchanged. Enable the microphone and press Record for a new take.'); };
 $('acceptSample').onclick = () => action(async () => {
-  profile = await post('samples', { index: sampleIndex, prompt_text: guide()[sampleIndex % guide().length].text, audio: await toBase64(take), confirmed_text: $('confirmedText').checked });
+  if (!take || !quality?.good || !$('confirmedText').checked) return;
+  try {
+    profile = await post('samples', { index: sampleIndex, prompt_text: guide()[sampleIndex % guide().length].text, audio: await toBase64(take), confirmed_text: $('confirmedText').checked });
+  } catch (error) { takeError = `NOT SAVED: ${error.message}. Your take is still in this tab; it has not been discarded.`; throw error; }
+  saveReceipt = `Saved successfully on server — ${profile.samples.length} recordings now saved in this profile.`;
   pendingNext = nextSentence(profile);
   resetTake();
   status(pendingNext === null ? `All ${guide().length} sentences saved. You can now create your reusable voice prompt.` : `Sentence saved privately. Take a breath, then choose “Ready for sentence ${pendingNext + 1}” when you want to continue.`);
@@ -200,8 +209,9 @@ for (const [button, kind] of [['playOriginal', 'original'], ['playSynthetic', 's
 $('acceptVoice').onclick = () => action(async () => { profile = await post('accept', { accept: true, test_id: profile.tests.at(-1).id }); await refreshProfiles(); status('You accepted this voice. Choose its presentation roles below.'); });
 $('saveRoles').onclick = () => action(async () => { profile = await post('roles', { roles: [...($('announcer').checked ? ['ANNOUNCER'] : []), ...($('commentator').checked ? ['COMMENTATOR'] : [])], publication_disclosure: $('publicationDisclosure').checked }); status('Role assignment saved. No authority identity has changed.'); });
 for (const [button, route] of [['addSample', 'add-sample'], ['requalify', 'requalify'], ['reject', 'reject']]) $(button).onclick = () => action(async () => {
+  if (take || (route === 'add-sample' && profile.qualification_status === 'RECORDING')) return;
   if (!confirm('This removes acceptance and role assignment, and deletes existing qualification/generated role audio. Continue?')) return;
-  stopPlayer(); await micOff(); profile = await post(route); resetTake(); await refreshProfiles(); status('Profile invalidated. Fresh qualification and explicit acceptance are required.');
+  stopPlayer(); await micOff(); profile = await post(route); selectGuide(); saveReceipt = ''; resetTake(); await refreshProfiles(); status('Profile invalidated. Fresh qualification and explicit acceptance are required.');
 });
 async function deleteProfile(reenrol) {
   if (!confirm('Delete this profile, all raw takes, conditioning data, comparisons and generated role audio? This cannot be undone by the application.')) return;
@@ -210,6 +220,7 @@ async function deleteProfile(reenrol) {
 }
 $('deleteVoice').onclick = () => action(() => deleteProfile(false)); $('reenrol').onclick = () => action(() => deleteProfile(true));
 window.addEventListener('pagehide', () => { stream?.getTracks().forEach(t => t.stop()); key = ''; stopPlayer(); });
+window.addEventListener('beforeunload', event => { if (take || recording) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('visibilitychange', () => { if (document.hidden && recording) finishRecording(); });
 
 // Real qualification uses the existing ConversationEngine/API. Presentation

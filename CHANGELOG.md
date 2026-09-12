@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-12 — Explicit recording save and adjacent guide
+
+- Rename Accept sample to Accept and save recording, show UNSAVED/NOT SAVED inline, and report the server-returned saved count after success. Failed saves retain the take and do not advance.
+- Block sentence/profile changes, new recording and qualification while a take is unsaved; explicit discard asks for confirmation, and page exit warns about unsaved work.
+- Hide Reopen recording during recording and reject redundant add-sample requests on the server. Reopening qualification is no longer presented as a way to save a take.
+- Move microphone setup before Read and record, place displayed sentence immediately above transport controls, and put guided progress directly beneath the recording block.
+- Regression tests cover failed-save retention, save receipts, navigation blocking, redundant reopen rejection and layout order. Live diagnosis found no saved samples in either current profile; earlier click outcomes cannot be reconstructed from that fact alone.
+
 ## 2026-09-12 — Four-sentence guided voice enrolment
 
 - Four original displayed sentences cover warm conversation, curiosity, firm disagreement and reflective reassurance, each with separate delivery guidance.

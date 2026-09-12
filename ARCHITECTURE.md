@@ -14,6 +14,10 @@ Sample upload must match the profile's displayed text. Browser progression waits
 for an explicit Ready action after saving, and separately for microphone/Record
 actions; no timer or sample acceptance starts capture. Only one selected reference
 conditions OmniVoice, so varied takes are not multi-style model training.
+An unsaved browser take is retained on upload failure and blocks prompt changes,
+new capture and profile transitions. A save receipt/count is set only after the
+server responds successfully. Reopening recording invalidates qualification, not
+sample acceptance, and is rejected when the profile is already recording.
 
 Permitted presentation role → accepted profile → provider adapter → existing
 OmniVoice model. A synthetic voice never becomes an authentication or Agent Control

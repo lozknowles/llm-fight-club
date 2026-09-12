@@ -11,6 +11,9 @@ for setup, security, storage/deletion, physical qualification and remaining gate
 New enrolments use four displayed sentences with contrasting delivery hints. Record,
 listen and accept each take, then choose **Ready for sentence N** to continue.
 Nothing records automatically. Existing recorded six-prompt profiles retain their guide.
+**Accept and save recording** is the save action; the checkbox alone does not save.
+An unsaved take blocks moving on until it is saved or explicitly discarded. The
+count labelled SAVED ON SERVER reflects successful server responses, not prompt numbers.
 
 A general spoken multi-agent conversation engine. Debate was the first format; v0.3 also supports interview, panel and cross-examination formats with reusable personality profiles, compact character state, dynamic interviewer follow-ups, durable transcripts, browser-controlled audio sequencing and model-initiated barge-in.
 

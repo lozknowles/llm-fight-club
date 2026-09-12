@@ -72,6 +72,7 @@ test('create persists consent, deterministically selects reference, and does not
 });
 test('sample upload requires recording state, valid quality, guided-text confirmation and four initial samples', async t => {
   const { lab } = await fixture(t), p = await lab.create(consent);
+  await assert.rejects(lab.reset(p.profile_id, 'add-sample'), /Already recording/);
   await assert.rejects(lab.sample(p.profile_id, 0, wav(), false), /Confirm/);
   await assert.rejects(lab.sample(p.profile_id, 12, wav(), true), /Confirm/);
   await assert.rejects(lab.sample(p.profile_id, 0, wav(1), true), /Record again/);

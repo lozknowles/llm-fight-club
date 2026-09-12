@@ -26,10 +26,7 @@
 <button id="continue" disabled>Continue to guided recording</button></section>
 <section id="profilePanel" hidden><h2 id="profileTitle"></h2><p id="profileState"></p>
 <p class="muted">OmniVoice uses one accepted reference, selected deterministically nearest eight seconds. These varied readings explore delivery; they do not train model weights or guarantee every style in the generated voice.</p>
-<div id="recordPanel"><h3>Guided recording</h3>
-<p id="guideNote" class="muted"></p><ol id="guideSteps" aria-label="Recording progress"></ol>
-<h3 id="guideTitle" tabindex="-1"></h3><p id="deliveryHint" class="muted"></p><p id="prompt" class="prompt"></p>
-<details><summary>Choose a sentence to revisit or an optional retake</summary><label>Sample <select id="sampleIndex"></select></label></details>
+<div id="recordPanel"><h3>Microphone setup</h3>
 <button id="enableMic">Enable microphone</button><button id="disableMic" disabled>Turn microphone off</button><label>Microphone <select id="microphones"><option value="">System default</option></select></label>
 <label>Recording processing <select id="captureMode"><option value="speech">Speech cleanup — noise suppression + echo cancellation</option><option value="raw">Raw — quiet room / studio microphone only</option></select></label>
 <p id="captureSettings" class="muted">Actual input and browser processing settings will appear after you enable the microphone.</p>
@@ -37,11 +34,17 @@
 <label>Input signal — includes background noise <meter id="meter" min="0" max="1" value="0"></meter></label>
 <p id="inputDb" class="muted">Microphone off. Bar colour is not a recording-quality verdict.</p>
 <p id="recordState">READY — microphone off</p>
+<div id="readRecord"><h3>Read and record</h3>
+<p id="guideNote" class="muted"></p><p id="progress" role="status"></p>
+<h3 id="guideTitle" tabindex="-1"></h3><p id="deliveryHint" class="muted"></p><p id="prompt" class="prompt"></p>
 <button id="record" disabled>Record</button><button id="stopRecord" disabled>Stop recording</button>
-<button id="playTake" disabled>Play back take</button><button id="rerecord" disabled>Re-record</button>
+<button id="playTake" disabled>Play back take</button><button id="rerecord" disabled>Discard unsaved take and retry</button>
 <p id="quality"></p><label class="check"><input id="confirmedText" type="checkbox">I have listened: my voice is clear above background noise, and I read the displayed text accurately.</label>
-<button id="acceptSample" disabled>Accept sample</button><p id="progress"></p>
+<button id="acceptSample" disabled>Accept and save recording</button><p id="takeStatus" role="status" aria-live="polite">No unsaved recording.</p>
 <button id="nextSentence" hidden>Ready for next sentence</button>
+</div>
+<div id="guideReview"><h3>Guided recording progress</h3><ol id="guideSteps" aria-label="Recording progress"></ol>
+<details><summary>Choose a sentence to revisit or an optional retake</summary><label>Sample <select id="sampleIndex"></select></label></details></div>
 <button id="build" disabled>Create reusable voice prompt</button></div>
 <div id="comparison" hidden><h3>Original / synthetic comparison</h3><p>These generated phrases were not in the enrolment prompts. Listen to both clips before deciding.</p>
 <button id="generateTest">Generate another test</button><p id="testText"></p>
@@ -51,7 +54,7 @@
 <label class="check"><input type="checkbox" id="announcer">ANNOUNCER</label><label class="check"><input type="checkbox" id="commentator">COMMENTATOR</label>
 <label class="check"><input type="checkbox" id="publicationDisclosure" checked>Include synthetic disclosure in publication metadata</label>
 <button id="saveRoles">Save role assignment</button></div>
-<div class="actions"><button id="addSample">Add sample / replace a take</button><button id="requalify">Re-qualify</button><button id="reenrol">Re-enrol with fresh consent</button><button id="deleteVoice" class="danger">Delete voice and all its recordings</button></div>
+<div class="actions"><button id="addSample">Reopen recording (invalidates voice qualification)</button><button id="requalify">Re-qualify</button><button id="reenrol">Re-enrol with fresh consent</button><button id="deleteVoice" class="danger">Delete voice and all its recordings</button></div>
 </section>
 <section id="bout" hidden><h2>Physical Fight Club qualification</h2><p>A real, short two-model debate. The accepted profile supplies announcement and commentary only. The models supply their own arguments; an LLM judge scores them. This is not an objective benchmark.</p>
 <label>Proposition <input id="boutPremise" value="Every town should have a free public library." maxlength="500"></label>

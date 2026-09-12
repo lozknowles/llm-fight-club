@@ -29,6 +29,16 @@ test('actual UI save handler waits for Ready, keeps consent manual, and never st
   vm.runInContext(script, sandbox);
   vm.runInContext(`config = {prompts: PROMPTS}; profile = {recording_prompts: PROMPTS, samples: [], tests: [], qualification_status: 'RECORDING'};
     selectGuide(); api = async () => ({...profile, samples: [...profile.samples, {index: sampleIndex}]});`, sandbox);
+  vm.runInContext(`take = new Blob(['fixture only']); quality = {good: true}; $('confirmedText').checked = true; render();
+    api = async () => { throw Error('Simulated save failure'); };`, sandbox);
+  assert.equal(get('sampleIndex').disabled, true); assert.equal(get('newProfile').disabled, true);
+  assert.equal(get('addSample').hidden, true); assert.equal(get('record').disabled, true);
+  await vm.runInContext(`$('acceptSample').onclick()`, sandbox);
+  assert.match(get('takeStatus').textContent, /NOT SAVED/);
+  assert.equal(vm.runInContext('profile.samples.length', sandbox), 0);
+  assert.equal(vm.runInContext('take.size', sandbox), 12);
+  assert.equal(get('nextSentence').hidden, true);
+  vm.runInContext(`api = async () => ({...profile, samples: [...profile.samples, {index: sampleIndex}]});`, sandbox);
   for (let i = 0; i < 4; i++) {
     vm.runInContext(`take = new Blob(['fixture only']); quality = {good: true}; $('confirmedText').checked = true;`, sandbox);
     await vm.runInContext(`$('acceptSample').onclick()`, sandbox);
@@ -36,6 +46,7 @@ test('actual UI save handler waits for Ready, keeps consent manual, and never st
     assert.equal(vm.runInContext('recording', sandbox), false);
     assert.equal(get('confirmedText').checked, false);
     assert.equal(get('record').disabled, true);
+    assert.match(get('takeStatus').textContent, new RegExp(`${i + 1} recordings now saved`));
     if (i < 3) {
       assert.equal(get('nextSentence').hidden, false);
       assert.equal(get('nextSentence').textContent, `Ready for sentence ${i + 2}`);
@@ -47,4 +58,13 @@ test('actual UI save handler waits for Ready, keeps consent manual, and never st
   }
   assert.equal(get('nextSentence').hidden, true); assert.equal(get('build').disabled, false);
   assert.match(get('status').textContent, /All 4 sentences saved/);
+});
+
+test('read-aloud text and controls are adjacent, with progress immediately beneath them', async () => {
+  const html = await fs.readFile(new URL('../public/voice-lab.html', import.meta.url), 'utf8');
+  assert.ok(html.indexOf('id="captureSettings"') < html.indexOf('id="readRecord"'));
+  const textAt = html.indexOf('id="prompt"'), recordAt = html.indexOf('id="record"');
+  assert.ok(textAt < recordAt && recordAt - textAt < 100);
+  assert.ok(html.indexOf('id="guideReview"') > html.indexOf('id="acceptSample"'));
+  assert.match(html, /Accept and save recording/);
 });
