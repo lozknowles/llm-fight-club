@@ -62,6 +62,23 @@ No credentials or cookies were copied into qualification scripts to bypass MFA.
 
 ### Saved replay follow-up
 
+### Speaker activity follow-up
+
+Application commit `ea38f890ab2fd06263259f775d23839d37a256ca` was promoted from
+`/fast/releases/spoken-ai-studio-csm-20260919-speaker-heads`. All 118 Linux tests
+passed. Signed-in saved replay showed Cedric talking with Mara listening; pause
+made both heads still, and disabling animation retained the talking/listening
+labels without movement. The layout was visually checked at a narrow browser
+width; this is not physical mobile qualification.
+
+Live CSM conversation `663b6f99-5ebf-4aa8-8ba9-cafab039fc8f` showed the correct
+participant preparing voice with an elapsed wait, then Cedric talking while Mara
+listened during audible playback. It completed both turns without a page error,
+with both heads returning to Finished. Protected model health remained OK and
+the existing speech worker remained running, without restart.
+
+### Saved replay validation
+
 The main conversation page now lists recent saved conversations and supports
 bookmarkable read-only views, whole-conversation/per-turn replay, explicit pause,
 resume, skip, stop, playback speed and current-turn captions. Saved views do not
