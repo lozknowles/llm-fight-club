@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Fight Club — Prepared Battles</title>
+<style>
+:root{font-family:system-ui;color:#f4ead8;background:#110f13;color-scheme:dark}body{max-width:1000px;margin:auto;padding:18px}a{color:#9cdcfe}h1{margin-bottom:.3em}.card{background:#211c25;border:1px solid #514354;border-radius:12px;padding:16px;margin:16px 0}label{display:block;margin:10px 0}input,select,textarea,button{font:inherit;border:1px solid #78657f;border-radius:7px;padding:10px;max-width:100%;box-sizing:border-box}textarea,select{width:100%}button{background:#8b3153;color:white;cursor:pointer;margin:4px;min-height:44px}button:disabled{background:#403a43;color:#a79faa;cursor:default}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.controls{position:sticky;top:0;z-index:2;background:#211c25f5}.muted{color:#c1b4c5;font-size:.9em}.response{border-left:5px solid #82d5eb}.host{border-left-color:#dbc075}.active{outline:2px solid #ffc354}.transcript{white-space:pre-wrap;overflow-wrap:anywhere}.caption{font-size:1.2em;min-height:2.7em}progress,audio{width:100%}#error{color:#ff9baa}input[type=checkbox]{width:20px;height:20px;vertical-align:middle}summary{cursor:pointer;min-height:32px}#responses{max-height:65vh;overflow:auto;overscroll-behavior:contain}pre{white-space:pre-wrap;overflow-wrap:anywhere}button:focus-visible,a:focus-visible{outline:3px solid #ffc354}
+</style></head><body>
+<a href="audio.html">← Spoken AI Studio</a><h1>Prepared Fight Club</h1>
+<p>Exact model answers. Independent text-based judging. Original synthetic performers.</p>
+<details open id="setup" class="card"><summary>Set up the fight</summary>
+<label>Proposition<textarea id="premise" maxlength="500" rows="3">Public libraries should stay open late.</textarea></label>
+<div class="grid"><label>Fighter A model<select id="modelA"></select></label><label>Fighter B model<select id="modelB"></select></label>
+<label>Rounds<select id="rounds"><option>1</option><option>2</option><option>3</option></select></label>
+<label>Speech route<select id="mode"><option value="CSM">High quality — CSM prepared audio (slow)</option><option value="FAST">Existing faster voice route</option><option value="TEXT">Text only — no speech generation</option></select></label></div>
+<label><input id="blind" type="checkbox" checked> Blind playback — Fighter A and Fighter B only</label>
+<button id="run" disabled>Run models and judge</button><p class="muted">Model execution and judging finish before speech starts. CSM may take several times longer to prepare than to play. Existing live debates are unchanged.</p></details>
+<section class="card controls"><div id="status" role="status">Loading configuration…</div>
+<button id="watch" disabled>Watch the fight</button><button id="pause" disabled>Pause</button><button id="resume" disabled>Resume</button><button id="skip" disabled>Skip response</button><button id="cancel" disabled>Stop preparing speech</button><button id="retry" disabled>Prepare missing speech</button>
+<label><input id="mute" type="checkbox"> Mute playback</label><label><input id="textOnly" type="checkbox"> Text only (stop preparing and playing audio)</label>
+<div id="caption" class="caption" aria-live="off"></div><progress id="progress" value="0" max="1" aria-label="Approximate response playback progress"></progress>
+<p class="muted">Captions use approximate word progress, not measured word alignment. Playback never changes the score.</p>
+<audio id="player" controls preload="none" playsinline></audio><p id="error" role="alert"></p></section>
+<div id="responses" aria-label="Prepared fight transcript"></div><section id="result" class="card" hidden></section>
+<p><a id="evidence" hidden>Speech and battle evidence (JSON)</a></p>
+<p class="muted">Experimental private playback. Watermark status is recorded per clip. Downloads are disabled unless evidence policy explicitly permits them. A browser can still capture playable media; this is not DRM.</p>
+<script type="module" src="prepared-battle.js"></script></body></html>

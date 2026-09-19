@@ -18,6 +18,7 @@ import { EnrolledSpeechProvider } from './speech/providers/enrolled-speech-provi
 import { FixedOmniVoiceProvider } from './speech/providers/fixed-omnivoice-provider.mjs';
 import { spokenText } from './lib/spoken-text.mjs';
 import { validateBoutScore } from './lib/voice-lab-judge.mjs';
+import { preparedBattleRoutes } from './lib/prepared-battle-http.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
@@ -27,6 +28,9 @@ let routes = {};
 try { routes = JSON.parse(process.env.FIGHT_CLUB_MODEL_ROUTES || '{}'); } catch { throw new Error('FIGHT_CLUB_MODEL_ROUTES must be JSON'); }
 const models = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_URL || 'http://127.0.0.1:18780/v1', routes });
 const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:18772';
+const preparedBattle = await preparedBattleRoutes({ directory: path.join(dataDir, 'prepared-battles'), models,
+  modelIds: Object.keys(routes).length ? Object.keys(routes) : ['qwen3-8b'], enabled: process.env.FIGHT_CLUB_PREPARED_ENABLED === '1',
+  speechUrl: process.env.AGENT_CONTROL_SPEECH_URL, speechToken: process.env.AGENT_CONTROL_SPEECH_TOKEN, fastUrl: speechBaseUrl });
 const conversations = new Map();
 const prefetches = new Map();
 const preparedAudio = new Map();
@@ -654,6 +658,7 @@ async function sendAudio(response, file, type, downloadName) {
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
+    if (await preparedBattle(request, response, url)) return;
     if (await voiceLab(request, response, url)) return;
     if (request.method === 'GET' && url.pathname === '/tts/voices') return await proxySpeech(request, response, url.pathname);
     if (request.method === 'POST' && ['/tts/synthesize', '/tts/stream'].includes(url.pathname)) return await proxySpeech(request, response, url.pathname);
