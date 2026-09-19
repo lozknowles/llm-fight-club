@@ -18,7 +18,8 @@ import { EnrolledSpeechProvider } from './speech/providers/enrolled-speech-provi
 import { FixedOmniVoiceProvider } from './speech/providers/fixed-omnivoice-provider.mjs';
 import { spokenText } from './lib/spoken-text.mjs';
 import { validateBoutScore } from './lib/voice-lab-judge.mjs';
-import { preparedBattleRoutes } from './lib/prepared-battle-http.mjs';
+import { preparedBattleRoutes, sendBattleAudio } from './lib/prepared-battle-http.mjs';
+import { createHash } from 'node:crypto';
 import { CapabilityMenuProvider, conversationAudioExportAllowed } from './speech/providers/capability-menu-provider.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -696,6 +697,25 @@ const server = http.createServer(async (request, response) => {
       const conversation = conversations.get(exportMatch[1]);
       if (!conversation) return send(response, 404, { error: 'Conversation not found' });
       return exportMatch[2] === 'json' ? send(response, 200, publicConversation(conversation)) : send(response, 200, markdown(conversation), 'text/markdown; charset=utf-8');
+    }
+    if (request.method === 'GET' && url.pathname === '/api/conversations') {
+      if (request.headers['sec-fetch-site'] === 'cross-site') return send(response,403,{error:'cross_site_denied'});
+      return send(response,200,[...conversations.values()].filter(c=>c.transcript.length)
+        .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,100)
+        .map(c=>({id:c.id,createdAt:c.createdAt,premise:c.premise,state:c.state,turnCount:c.transcript.length,savedAudioCount:c.transcript.filter(t=>t.audio_file).length})));
+    }
+    const replayMatch = url.pathname.match(/^\/api\/conversations\/([\w-]+)\/playback\/([\w-]+)\.wav$/);
+    if (request.method === 'GET' && replayMatch) {
+      if (request.headers['sec-fetch-site'] === 'cross-site') return send(response,403,{error:'cross_site_denied'});
+      const conversation=conversations.get(replayMatch[1]);
+      const turn=conversation?.transcript.find(t=>t.turn_id===replayMatch[2] && t.audio_file);
+      if(!turn)return send(response,404,{error:'Saved turn audio not found'});
+      let bytes;
+      try { bytes=await fs.readFile(turnAudioPath(dataDir,conversation.id,turn.turn_id)); }
+      catch(e){ if(e.code==='ENOENT')return send(response,404,{error:'Saved audio file is missing; no speech was regenerated'}); throw e; }
+      if(turn.speech_evidence?.audioHash && createHash('sha256').update(bytes).digest('hex')!==turn.speech_evidence.audioHash)
+        return send(response,409,{error:'Saved audio evidence mismatch'});
+      return sendBattleAudio(request,response,bytes);
     }
     const turnAudioMatch = url.pathname.match(/^\/api\/conversations\/([\w-]+)\/audio\/([\w-]+)\.wav$/);
     if (request.method === 'GET' && turnAudioMatch) {

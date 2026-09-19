@@ -227,3 +227,20 @@ While turn A is audible, the server may prepare turn B on a cloned conversation 
 `Throw a Grenade` is a first-class audience intervention rather than transcript text pretending to be a participant. Typed or browser-transcribed input stops current playback, invalidates the cloned prefetch, persists the intervention, and adds a per-participant acknowledgement obligation. The intervention remains in JSON/Markdown exports and compact prompt context.
 
 The application router is a qualified prototype, not a replacement for Agent Control. Its profile/capability vocabulary maps directly to Agent Control provider resources and a future verified `speech.synthesize@1` job action.
+
+### Saved conversation playback
+
+`ArchiveReplay` is a presentation-only controller on a separate HTML audio element.
+It reads existing per-turn WAVs in transcript order and never invokes generation,
+judging or live playback acknowledgements. Replay is available after completion,
+when paused, and in read-only `?conversation=<id>` views. The recent-conversation
+catalogue is served behind the same private-hub authentication as the Studio.
+
+`GET /api/conversations/:id/playback/:turn.wav` verifies the turn association and,
+when present, its speech-evidence audio hash. It supports byte ranges for native
+seeking/mobile playback and returns a visible error for missing/corrupt audio.
+This playback route is independent of downloadable WAV/MP3 export qualification;
+CSM export gates remain unchanged. No playback statistics modify the authoritative
+model transcript or benchmark scores. Browser playback is not a copy-protection
+mechanism. Whole replay is a sequential playlist, so small network loading gaps
+are possible but there are no synthesis waits.

@@ -1,6 +1,7 @@
 import { pcmS16leToWav } from './audio-format.js';
 import { controlAvailability } from './control-state.js';
 import { playbackDuration } from './playback-duration.js';
+import { ArchiveReplay } from './archive-replay.js';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -13,6 +14,7 @@ if (disclosure) disclosure.textContent = 'AI-generated synthetic voices · turn-
 
 let config;
 let conversation;
+let archivedView = false;
 let voices = [];
 let voiceOptions = [];
 let voiceProfiles = [];
@@ -35,6 +37,16 @@ let bargeCheckpointIndex = 0;
 let pendingInterruptionTiming = null;
 const player = $('#player');
 const archivePlayer = $('#archivePlayer');
+const replay = new ArchiveReplay(archivePlayer, {
+  url: (id, turn) => endpoint(`/api/conversations/${id}/playback/${turn}.wav`),
+  onState: ({state,index,count,turn}) => {
+    $('#replayStatus').textContent = `${state}${turn ? ` · saved turn ${index+1}/${count} · ${turn.speaker}` : ''}`;
+    $('#replayCaption').textContent = turn?.text || '';
+    $('#replaySkip').disabled = index < 0 || index + 1 >= count;
+    $('#replayStop').disabled = index < 0;
+  },
+});
+const canReplay = () => archivedView || ['COMPLETED','STOPPED','ERROR','PAUSED'].includes(conversation?.state);
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const audioContext = AudioContextClass ? new AudioContextClass({ latencyHint: 'interactive', sampleRate: 24000 }) : null;
 const speechGain = audioContext ? audioContext.createGain() : null;
@@ -424,8 +436,13 @@ function participant(card) {
 function render() {
   if (!conversation) return;
   renderHeat(conversation.conversationHeat);
-  $('#status').textContent = `${conversation.format} · ${conversation.state} · ${conversation.transcript.length}/${conversation.turnLimit} · ${conversation.conversationHeat} · ${speechProfile}`;
+  const csmCount=conversation.participants.filter(p=>p.voice.startsWith('csm-')).length;
+  const displayedProfile=csmCount ? (csmCount===conversation.participants.length?'CSM':'MIXED VOICES') : (conversation.speechProfile||speechProfile);
+  $('#status').textContent = `${conversation.format} · ${conversation.state} · ${conversation.transcript.length}/${conversation.turnLimit} · ${conversation.conversationHeat} · ${displayedProfile}`;
   const controls = controlAvailability(conversation);
+  if (archivedView) Object.keys(controls).forEach(key => controls[key] = false);
+  const replayAllowed = canReplay();
+  if (archivedView) $('#conversationHeat').disabled = true;
   $('#pause').disabled = !controls.pause;
   $('#resume').disabled = !controls.resume;
   $('#skip').disabled = !controls.skip;
@@ -439,7 +456,7 @@ function render() {
     const live = index === conversation.transcript.length - 1 && conversation.awaitingPlayback
       ? ` · first playable ${metrics.first_playable_ms ?? 'waiting'} ms · provider ${metrics.provider || 'routing'}`
       : '';
-    const audio = turn.audio_file && turn.audio_export_allowed !== false ? ` · <a href="${endpoint(`/api/conversations/${conversation.id}/audio/${turn.turn_id}.wav`)}" download="turn-${turn.turn_index + 1}.wav">WAV</a>` : '';
+    const audio = turn.audio_file ? ` · <button type="button" data-replay-turn="${escapeHtml(turn.turn_id)}" ${replayAllowed?'':'disabled'}>Replay turn ${index+1}</button>${turn.audio_export_allowed !== false ? ` · <a href="${endpoint(`/api/conversations/${conversation.id}/audio/${turn.turn_id}.wav`)}" download="turn-${turn.turn_index + 1}.wav">Download WAV</a>` : ''}` : '';
     const interruption = turn.programme_introduction ? ' · programme introduction' : turn.interrupted ? ` · interrupted by ${escapeHtml(turn.interrupted_by_name || 'listener')}` : turn.autonomous_interruption ? ' · autonomous interruption' : turn.interruption_reaction ? ' · interruption response' : '';
     return `<article class="turn ${speaking}" style="--accent:${['#63d2ff', '#ff6b9a', '#ffd166'][participantIndex % 3]}">
       <b>${escapeHtml(turn.speaker)}</b> <span class="meta">${escapeHtml(turn.role)} · ${escapeHtml(turn.model)} · voice ${escapeHtml(turn.voice)} · voice speed ${turn.speech_rate || 1}×</span>
@@ -457,15 +474,15 @@ function render() {
     return `<div class="intervention"><b>💣 Audience curve ball</b><p>${escapeHtml(item.text)}</p><span class="meta">${pending ? `${pending} participant${pending === 1 ? '' : 's'} still to address it` : 'Addressed by everyone'}</span></div>`;
   }).join('');
   const audioReady = conversation.audio?.status === 'ready';
-  const archiveUrl = endpoint(`/api/conversations/${conversation.id}/conversation.mp3`);
+  replay.setConversation(conversation);
+  $('#jsonExport').href = endpoint(`/api/conversations/${conversation.id}/export.json`);
+  $('#mdExport').href = endpoint(`/api/conversations/${conversation.id}/export.md`);
+  $('#audioExport').href = endpoint(`/api/conversations/${conversation.id}/conversation.mp3`);
   $('#audioExport').hidden = !audioReady;
-  $('#archivePlayback').hidden = !audioReady;
-  if (audioReady && archivePlayer.dataset.conversationId !== conversation.id) {
-    archivePlayer.src = archiveUrl;
-    archivePlayer.dataset.conversationId = conversation.id;
-    archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
-    archivePlayer.preservesPitch = true;
-  }
+  $('#archivePlayback').hidden = false;
+  $('#replayAll').disabled = !replayAllowed || !replay.turns.length;
+  $('#archiveNotice').textContent = `${replay.turns.length}/${conversation.transcript.length} turns have saved audio. Replay uses those files, without generating speech again. ${!replayAllowed?'Pause or finish the conversation before replaying. ':''}${conversation.transcript.some(t=>t.audio_export_allowed===false)?'Private CSM replay is available; CSM downloads remain disabled pending watermark/export qualification.':audioReady?'Use Conversation MP3 to save the whole conversation, or Download WAV beside a turn.':'MP3 is available once permitted audio export has completed.'}`;
+  $('#savedConversationLink').href = `${endpoint('/audio.html')}?conversation=${encodeURIComponent(conversation.id)}`;
 }
 
 function escapeHtml(value) {
@@ -563,6 +580,7 @@ async function next() {
 $('#setup').onsubmit = async (event) => {
   event.preventDefault();
   try {
+    replay.stop(); archivedView = false;
     $('#error').textContent = '';
     if (audioContext) await audioContext.resume();
     const participants = $$('.participant').filter((card) => card.style.display !== 'none').map(participant);
@@ -587,6 +605,7 @@ $('#setup').onsubmit = async (event) => {
     $('#jsonExport').href = endpoint(`/api/conversations/${conversation.id}/export.json`);
     $('#mdExport').href = endpoint(`/api/conversations/${conversation.id}/export.md`);
     $('#audioExport').href = endpoint(`/api/conversations/${conversation.id}/conversation.mp3`);
+    history.replaceState(null,'',`${endpoint('/audio.html')}?profile=${encodeURIComponent(speechProfile)}&conversation=${encodeURIComponent(conversation.id)}`);
     render();
     await next();
   } catch (error) {
@@ -615,6 +634,17 @@ $('#archivePlaybackRate').onchange = () => {
   archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
   archivePlayer.preservesPitch = true;
 };
+$('#replayAll').onclick = () => { if(canReplay()) replay.play(0,true); };
+$('#replaySkip').onclick = () => replay.skip();
+$('#replayStop').onclick = () => replay.stop();
+$('#transcript').onclick = event => {
+  const button=event.target.closest('[data-replay-turn]');
+  if(button && canReplay()) replay.play(replay.turns.findIndex(t=>t.turn_id===button.dataset.replayTurn),false);
+};
+$('#openSaved').onclick = () => {
+  const id=$('#savedConversations').value;
+  if(id) window.open(`${endpoint('/audio.html')}?conversation=${encodeURIComponent(id)}`,'_blank','noopener');
+};
 $('#pause').onclick = async () => {
   player.pause();
   if (audioContext) await audioContext.suspend();
@@ -622,6 +652,7 @@ $('#pause').onclick = async () => {
   render();
 };
 $('#resume').onclick = async () => {
+  replay.stop();
   conversation = await api(`/api/conversations/${conversation.id}/resume`, 'POST', {});
   if (audioContext) await audioContext.resume();
   if (conversation.awaitingPlayback && player.readyState >= 2 && !player.ended) await player.play();
@@ -684,6 +715,7 @@ if (!SpeechRecognitionClass) {
 $$('.preview').forEach((button) => {
   button.onclick = async () => {
     try {
+      replay.stop();
       stopAudio();
       const card = button.closest('.participant');
       const response = await fetch(`${ttsBase}/synthesize`, {
@@ -719,3 +751,13 @@ voiceOptions = voiceResponse.voiceOptions || voices.map((id) => ({ id, label: id
 voiceProfiles = voiceResponse.voiceProfiles || [];
 configure();
 fill();
+try {
+  const saved=await api('/api/conversations');
+  $('#savedConversations').replaceChildren(new Option('Choose a saved conversation…',''),...saved.map(c=>new Option(`${c.createdAt.slice(0,16).replace('T',' ')} · ${c.premise} · ${c.savedAudioCount} saved audio turns`,c.id)));
+  const savedId=new URLSearchParams(location.search).get('conversation');
+  if(savedId){
+    conversation=await api(`/api/conversations/${encodeURIComponent(savedId)}`); archivedView=true;
+    $('#setup').style.display='none'; $('#controls').style.display='block'; render();
+    $('#status').textContent+=' · SAVED VIEW (no generation)';
+  }
+} catch(error) { $('#error').textContent=`Saved conversations: ${error.message}`; }

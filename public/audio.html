@@ -37,6 +37,11 @@
 </style>
 <body>
   <h1>Spoken AI Studio</h1>
+  <details class="card"><summary>Saved conversations — listen again</summary>
+    <label>Recent conversations<select id="savedConversations"><option value="">Loading…</option></select></label>
+    <button id="openSaved" type="button">Open saved conversation</button>
+    <a href="audio.html">Start a new conversation</a>
+  </details>
   <p><a href="prepared-battle.html">CSM Fight Club — create a new prepared battle with Mallow and two fighter voices</a></p>
   <nav><a href="voice-lab.html" style="color:#63d2ff">Voice Lab — consent, record, compare and enrol</a></nav>
   <p>AI-generated synthetic voices · turn-based audio · unscripted personalities</p>
@@ -116,6 +121,14 @@
       <p id="bargeInStatus" class="meta">Waiting for an audible checkpoint.</p>
     </div>
     <div id="archivePlayback" class="archive-player" hidden>
+      <h3>Listen again — saved audio</h3>
+      <p id="archiveNotice" class="meta"></p>
+      <button id="replayAll" type="button">Play whole conversation</button>
+      <button id="replaySkip" type="button" disabled>Skip saved turn</button>
+      <button id="replayStop" type="button" disabled>Stop replay</button>
+      <a id="savedConversationLink">Bookmark this conversation</a>
+      <p id="replayStatus" role="status" aria-live="polite">Choose Play whole conversation or Replay turn.</p>
+      <p id="replayCaption"></p>
       <label>WHOLE CONVERSATION PLAYBACK SPEED
         <select id="archivePlaybackRate"><option value="0.75">0.75×</option><option value="1" selected>1.00×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option><option value="2">2.00×</option></select>
       </label>

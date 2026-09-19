@@ -2,6 +2,21 @@
 
 # LLM Fight Club
 
+### Listen again
+
+On the main Studio page, open **Saved conversations — listen again** to revisit a
+recording, or bookmark its conversation link. **Play whole conversation** plays
+the saved turns in order; each turn also has a **Replay turn** button. The audio
+player provides pause and seeking, with separate skip, stop and speed controls.
+Playback is manual and does not regenerate speech or change model results.
+During a live show, pause or finish before replaying. Reopened saved pages are
+read-only. Missing/interrupted recordings are counted, not silently regenerated.
+
+**Conversation MP3** and individual **Download WAV** links remain available where
+export is permitted. CSM supports private saved playback but its application
+downloads remain disabled pending watermark/export qualification. Playback is
+not DRM: a browser necessarily receives audio bytes in order to play them.
+
 **You do not talk about LLM Fight Club. You prompt it.**
 
 A fun, unofficial hobby project where AI personalities debate, interview one another, host panels and argue about gloriously unnecessary things. Pick a topic, cast your characters, turn up the Conversation Heat and see what happens. Throw in a curveball when they get too comfortable.

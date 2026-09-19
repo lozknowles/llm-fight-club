@@ -1,5 +1,12 @@
 # Changelog
 
+## Saved conversation replay — 2026-09-19
+
+- Add a recent saved-conversation picker and bookmarkable, read-only conversation pages.
+- Add whole-conversation and per-turn replay, native pause/seek controls, skip, stop, speed and current-turn captions. Replay never invokes a model or TTS, alters a transcript, or acknowledges live playback.
+- Serve saved WAVs through a separate private, byte-range playback route with CSM audio-hash verification. Keep permitted MP3/WAV downloads and explicitly explain the pending CSM export restriction.
+- Label CSM/mixed-voice conversations from their selected voices rather than a stale URL profile.
+
 ## Private CSM testing deployment — 2026-09-19
 
 - Also expose clearly named CSM Fighter A, Fighter B and Mallow choices in the main conversation voice menu. `?profile=CSM` selects CSM defaults; recorded and OmniVoice defaults are preserved.

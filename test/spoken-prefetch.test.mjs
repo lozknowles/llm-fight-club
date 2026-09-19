@@ -59,7 +59,7 @@ async function fixture(t, capability = false) {
   const route = `/api/conversations/${c.id}`;
   const next = async () => (await post(route + '/next')).json();
   const speech = turn => post('/tts/stream', { conversationId: c.id, turnId: turn.turn_id, text: turn.text, voice: turn.voice });
-  return { state, post, c, route, next, speech, base };
+  return { state, post, c, route, next, speech, base, dir };
 }
 
 test('main HTTP voice catalogue and conversation use generic CSM capability with persisted evidence and export gate',async t=>{
@@ -74,6 +74,32 @@ test('main HTTP voice catalogue and conversation use generic CSM capability with
  assert.equal((await fetch(`${f.base}${f.route}/audio/${first.turn_id}.wav`)).status,403);
  assert.equal((await fetch(`${f.base}${f.route}/conversation.mp3`)).status,403);
  assert.equal(f.state.calls[0].voice,'fighter-a');
+ const before=JSON.stringify(c);const count=f.state.calls.length;
+ const replay=await fetch(`${f.base}${f.route}/playback/${first.turn_id}.wav`);
+ assert.equal(replay.status,200);assert.equal(replay.headers.get('content-disposition'),null);
+ assert.equal(sha256(Buffer.from(await replay.arrayBuffer())),c.transcript[0].speech_evidence.audioHash);
+ const range=await fetch(`${f.base}${f.route}/playback/${first.turn_id}.wav`,{headers:{range:'bytes=0-99'}});
+ assert.equal(range.status,206);assert.equal((await range.arrayBuffer()).byteLength,100);
+ assert.equal((await fetch(`${f.base}${f.route}/playback/${first.turn_id}.wav`,{headers:{range:'bytes=9999999-'}})).status,416);
+ assert.equal((await fetch(`${f.base}${f.route}/playback/missing.wav`)).status,404);
+ assert.equal((await fetch(`${f.base}${f.route}/playback/${first.turn_id}.wav`,{headers:{'sec-fetch-site':'cross-site'}})).status,403);
+ const saved=await(await fetch(f.base+'/api/conversations')).json();assert.equal(saved[0].id,c.id);assert.equal(saved[0].savedAudioCount,1);
+ assert.equal(f.state.calls.length,count);assert.equal(JSON.stringify(await(await fetch(f.base+f.route)).json()),before);
+ await fs.appendFile(path.join(f.dir,'audio',c.id,`${first.turn_id}.wav`),'corrupt');
+ assert.equal((await fetch(`${f.base}${f.route}/playback/${first.turn_id}.wav`)).status,409);
+});
+
+test('existing faster voices replay saved bytes while retaining their WAV download',async t=>{
+ const f=await fixture(t),turn=(await f.next()).turn;
+ const generated=Buffer.from(await(await f.speech(turn)).arrayBuffer());await new Promise(r=>setTimeout(r,30));
+ const before=JSON.stringify(await(await fetch(f.base+f.route)).json());
+ const replay=await fetch(`${f.base}${f.route}/playback/${turn.turn_id}.wav`);
+ assert.equal(replay.status,200);assert.deepEqual(Buffer.from(await replay.arrayBuffer()),generated);
+ const download=await fetch(`${f.base}${f.route}/audio/${turn.turn_id}.wav`);assert.equal(download.status,200);
+ assert.match(download.headers.get('content-disposition'),/attachment/);
+ assert.equal(f.state.calls.length,1);assert.equal(JSON.stringify(await(await fetch(f.base+f.route)).json()),before);
+ await fs.unlink(path.join(f.dir,'audio',f.c.id,`${turn.turn_id}.wav`));
+ assert.equal((await fetch(`${f.base}${f.route}/playback/${turn.turn_id}.wav`)).status,404);
 });
 
 test('real HTTP pipeline prepares next speech before completion, strips posture and reuses the audio', async t => {
