@@ -29,6 +29,11 @@ export class ArchiveReplay {
     if (this.index + 1 < this.turns.length) return this.play(this.index + 1, this.continuous);
     this.stop(); this.emit('Finished');
   }
+  pause() { this.player.pause(); }
+  async resume() {
+    if(this.index<0)return;
+    try { await this.player.play(); } catch { this.emit('Press play to resume saved audio.'); }
+  }
   stop() {
     this.revision++; this.continuous = false; this.player.pause();
     this.player.removeAttribute('src'); this.player.load(); this.index = -1; this.emit('Stopped');

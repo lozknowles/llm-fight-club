@@ -44,6 +44,8 @@ const replay = new ArchiveReplay(archivePlayer, {
     $('#replayCaption').textContent = turn?.text || '';
     $('#replaySkip').disabled = index < 0 || index + 1 >= count;
     $('#replayStop').disabled = index < 0;
+    $('#replayPause').disabled = index < 0 || archivePlayer.paused || archivePlayer.ended;
+    $('#replayResume').disabled = index < 0 || !archivePlayer.paused || archivePlayer.ended;
   },
 });
 const canReplay = () => archivedView || ['COMPLETED','STOPPED','ERROR','PAUSED'].includes(conversation?.state);
@@ -600,6 +602,7 @@ $('#setup').onsubmit = async (event) => {
       participants,
     });
     $('#setup').style.display = 'none';
+    $('#setup').hidden = true;
     $('#controls').style.display = 'block';
     $('#transcript').hidden = false;
     $('#jsonExport').href = endpoint(`/api/conversations/${conversation.id}/export.json`);
@@ -632,9 +635,12 @@ $('#conversationHeat').onchange = async () => {
 };
 $('#archivePlaybackRate').onchange = () => {
   archivePlayer.playbackRate = Number($('#archivePlaybackRate').value);
+  archivePlayer.defaultPlaybackRate = archivePlayer.playbackRate;
   archivePlayer.preservesPitch = true;
 };
 $('#replayAll').onclick = () => { if(canReplay()) replay.play(0,true); };
+$('#replayPause').onclick = () => replay.pause();
+$('#replayResume').onclick = () => replay.resume();
 $('#replaySkip').onclick = () => replay.skip();
 $('#replayStop').onclick = () => replay.stop();
 $('#transcript').onclick = event => {
@@ -757,7 +763,7 @@ try {
   const savedId=new URLSearchParams(location.search).get('conversation');
   if(savedId){
     conversation=await api(`/api/conversations/${encodeURIComponent(savedId)}`); archivedView=true;
-    $('#setup').style.display='none'; $('#controls').style.display='block'; render();
+    $('#setup').hidden=true; $('#setup').style.display='none'; $('#controls').style.display='block'; render();
     $('#status').textContent+=' · SAVED VIEW (no generation)';
   }
 } catch(error) { $('#error').textContent=`Saved conversations: ${error.message}`; }

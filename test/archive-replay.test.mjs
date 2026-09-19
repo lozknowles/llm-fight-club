@@ -26,3 +26,9 @@ test('missing audio and blocked browser playback fail visibly without synthesisi
  await replay.play(0,true);assert.match(states.at(-1).state,/Press play/);
  player.onerror();assert.equal(replay.continuous,false);assert.match(states.at(-1).state,/could not be loaded/);
 });
+test('pause and resume preserve the saved source and continuous sequence',async()=>{
+ const {player,replay}=fixture();let paused=0;player.pause=()=>paused++;
+ await replay.play(0,true);const src=player.src;replay.pause();await replay.resume();
+ assert.equal(player.src,src);assert.equal(replay.continuous,true);assert.ok(paused>=1);
+ assert.deepEqual(player.plays,[src,src]);
+});

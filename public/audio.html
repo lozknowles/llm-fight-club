@@ -5,6 +5,7 @@
 <title>Spoken AI Studio — Server Audio</title>
 <style>
   :root{font-family:Inter,system-ui;color:#f4ead8;background:#110f13}
+  [hidden]{display:none!important}
   body{max-width:980px;margin:auto;padding:20px}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
   .card{background:#211c25;border:1px solid #46384c;border-radius:14px;padding:16px;margin:14px 0}
@@ -124,6 +125,8 @@
       <h3>Listen again — saved audio</h3>
       <p id="archiveNotice" class="meta"></p>
       <button id="replayAll" type="button">Play whole conversation</button>
+      <button id="replayPause" type="button" disabled>Pause replay</button>
+      <button id="replayResume" type="button" disabled>Resume replay</button>
       <button id="replaySkip" type="button" disabled>Skip saved turn</button>
       <button id="replayStop" type="button" disabled>Stop replay</button>
       <a id="savedConversationLink">Bookmark this conversation</a>
