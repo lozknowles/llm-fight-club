@@ -21,7 +21,7 @@ protocol = sys.stdout
 sys.stdout = sys.stderr
 import numpy as np
 import torch
-from transformers import AutoProcessor, CsmForConditionalGeneration, StoppingCriteria, StoppingCriteriaList
+from transformers import AutoProcessor, CsmForConditionalGeneration
 
 
 def emit(value):
@@ -61,14 +61,6 @@ sample_rate = int(getattr(processor, 'sampling_rate', 24000))
 settings = {'temperature': 0.9, 'do_sample': True, 'seed': 520000, 'max_new_tokens': 2048, 'precision': 'float16'}
 
 
-class Cancelled(StoppingCriteria):
-    def __init__(self, event):
-        self.event = event
-
-    def __call__(self, *args, **kwargs):
-        return self.event.is_set()
-
-
 def generate(text, seed, anchor=None, event=None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -80,8 +72,9 @@ def generate(text, seed, anchor=None, event=None):
     if 'input_values' in inputs:
         inputs['input_values'] = inputs['input_values'].to(dtype=torch.float16)
     with torch.inference_mode():
-        audio = model.generate(**inputs, output_audio=True, do_sample=True, temperature=0.9, max_new_tokens=2048,
-                               stopping_criteria=StoppingCriteriaList([Cancelled(event or threading.Event())]))
+        # This pinned CSM implementation ignores custom stopping criteria.
+        # Cancellation suppresses delivery/cache insertion; it does not preempt GPU work.
+        audio = model.generate(**inputs, output_audio=True, do_sample=True, temperature=0.9, max_new_tokens=2048)
     torch.cuda.synchronize()
     if event and event.is_set():
         raise RuntimeError('speech_cancelled')
@@ -135,7 +128,7 @@ for name, seed in [('fighter-a', 71001), ('fighter-b', 92003), ('mallow', 414011
     voices.append({'id': name, 'revision': digest(data), 'provenance': 'original-generated-synthetic'})
 
 emit({'ready': True, 'capabilities': {'backend': 'csm-fp16', 'checkpoint': checkpoint, 'codecVersion': 'wav-pcm16-mono-24000-v1',
-      'voices': voices, 'settings': settings, 'streaming': False, 'cancellation': 'cooperative-token-boundary; decode may finish before cancellation',
+      'voices': voices, 'settings': settings, 'streaming': False, 'cancellation': 'queue cancellation and result discard; active GPU generation is not preempted',
       'watermark': 'NOT_APPLIED', 'exportAllowed': False, 'modelLoadMs': load_ms}})
 
 jobs = queue.Queue(maxsize=16)

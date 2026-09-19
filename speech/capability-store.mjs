@@ -12,6 +12,8 @@ export class SpeechCapabilityStore {
     try {
       const data = JSON.parse(await fs.readFile(path.join(this.directory, `${key}.json`), 'utf8'));
       if (sha256(Buffer.from(data.audio, 'base64')) !== data.evidence.audioHash || data.evidence.cacheKey !== key) throw Error('cache_integrity_failed');
+      const { transcriptHash, voiceIdentity, backend, checkpoint, settings, codecVersion } = data.evidence;
+      if (sha256(canonical({ transcriptHash, voiceIdentity, backend, checkpoint, settings, codecVersion })) !== key) throw Error('cache_binding_integrity_failed');
       return data;
     } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
   }

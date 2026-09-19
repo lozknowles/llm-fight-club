@@ -12,3 +12,9 @@ voice-lab-private/
 *.voiceprompt
 *.voice-recording.wav
 .voice-lab-preview/
+.private/
+runtime-private.json
+**/runtime-private.json
+.qualification/
+speech-cache/
+voice-anchors/

@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 const base = new URL('./', location.href), audio = $('player');
-let battle, current = -1, watch = false, requestedAt = 0, pollBusy = false, changing = false;
+let battle, current = -1, watch = false, requestedAt = 0, pollBusy = false, changing = false, replayOnly = false;
 const cards = new Map();
 async function api(route, body) {
   const response = await fetch(new URL(`api/prepared-battles${route}`, base), body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -20,7 +20,7 @@ function controls() {
   $('watch').disabled = !battle?.presentation.length || disabled;
   $('skip').disabled = current < 0 || current >= (battle?.presentation.length || 0) - 1;
   $('cancel').disabled = !battle?.presentation.some(r => ['QUEUED','PREPARING'].includes(r.state));
-  $('retry').disabled = !battle || battle.executionState !== 'COMPLETED' || battle.speechMode === 'TEXT' || disabled || !$('cancel').disabled;
+  $('retry').disabled = replayOnly || !battle || battle.executionState !== 'COMPLETED' || battle.speechMode === 'TEXT' || disabled || !$('cancel').disabled;
   for (const [id, card] of cards) {
     const row = battle.presentation.find(r => r.id === id);
     card.play.disabled = disabled || row.state !== 'READY'; card.pause.disabled = row.id !== battle.presentation[current]?.id || audio.paused;
@@ -98,7 +98,7 @@ $('pause').onclick = () => { audio.pause(); controls(); };
 $('resume').onclick = action(async () => { requestedAt = performance.now(); await audio.play(); controls(); });
 $('skip').onclick = next;
 $('mute').onchange = () => { audio.muted = $('mute').checked; };
-$('textOnly').onchange = action(async () => { if ($('textOnly').checked) { watch = false; stop(); if (battle) battle = await api(`/${battle.id}/cancel`, {}); } render(); });
+$('textOnly').onchange = action(async () => { if ($('textOnly').checked) { watch = false; stop(); if (battle && !replayOnly) battle = await api(`/${battle.id}/cancel`, {}); } render(); });
 $('cancel').onclick = action(async () => { watch = false; stop(); battle = await api(`/${battle.id}/cancel`, {}); render(); });
 $('retry').onclick = action(async () => { battle = await api(`/${battle.id}/prepare`, {}); render(); });
 audio.onplaying = () => { event('play'); controls(); };
@@ -119,7 +119,8 @@ try {
   const config = await api('/config');
   for (const id of ['modelA','modelB']) for (const name of config.models) { const option = document.createElement('option'); option.value = name; option.textContent = name; $(id).append(option); }
   if (config.models.length > 1) $('modelB').selectedIndex = 1;
-  $('run').disabled = false; $('status').textContent = `CSM service: ${config.speechHealth.state}. No audio will play until you press Play or Watch.`;
+  replayOnly = config.replayOnly; $('run').disabled = replayOnly;
+  $('status').textContent = `${replayOnly ? 'Read-only evidence replay' : `CSM service: ${config.speechHealth.state}`}. No audio will play until you press Play or Watch.`;
   const id = new URL(location.href).searchParams.get('battle');
   if (id && /^[a-f0-9-]{36}$/.test(id)) { battle = await api(`/${id}`); $('setup').open = false; render(); }
 } catch (e) { fail(e); }

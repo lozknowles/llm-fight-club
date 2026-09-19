@@ -1,4 +1,5 @@
 /** Existing faster route, exposed through the same capability service/cache boundary. */
+import { pcmS16leToWav } from '../../public/audio-format.js';
 export class FastRouteBackend {
   constructor({ url, revision = 'existing-router-v1', request = fetch }) { this.url = url; this.revision = revision; this.request = request; }
   capabilities() {
@@ -14,7 +15,9 @@ export class FastRouteBackend {
     if (!res.ok || res.headers.get('x-tts-fallback') === 'true') throw Error('fast_route_unavailable_or_voice_substituted');
     const chunks = []; let size = 0;
     for await (const part of res.body) { size += part.length; if (size > 16000000) throw Error('speech_response_too_large'); chunks.push(part); }
-    const bytes = Buffer.concat(chunks);
+    const raw = Buffer.concat(chunks);
+    const bytes = res.headers.get('x-audio-format') === 'pcm_s16le_24000_mono'
+      ? Buffer.from(pcmS16leToWav(raw)) : raw;
     let rate = 0, length = 0;
     for (let offset = 12; offset + 8 <= bytes.length;) {
       const id = bytes.toString('ascii', offset, offset + 4), n = bytes.readUInt32LE(offset + 4);

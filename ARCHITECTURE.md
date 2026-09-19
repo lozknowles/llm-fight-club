@@ -1,5 +1,23 @@
 # Architecture
 
+## Experimental prepared-battle boundary
+
+`PreparedBattles` is an optional, separate workflow behind `FIGHT_CLUB_PREPARED_ENABLED`.
+It preserves exact response text and completes text-based judging before sealing a
+benchmark hash. Speech preparation and browser playback cannot change that result.
+The original spoken-conversation execution path remains intact.
+
+The app uses `SpeechCapabilityClient` and generic `speech.*` RPCs. Only the optional
+worker adapter imports CSM. Capability declarations pin voice revisions, checkpoint,
+settings and codec for a battle; cache entries bind those values to transcript and
+audio SHA-256 hashes. Cancelled or failed preparations fall back to text. Active CSM
+GPU computation is not preemptible; late cancelled output is discarded.
+
+Secrets remain in server environment/private runtime state. The loopback capability
+service requires a bearer token; the battle interface must remain behind the existing
+private access boundary. Browser configuration never receives model API keys or the
+speech token. See [prepared-battle operations and evidence](docs/PREPARED-BATTLES.md).
+
 ## 1.2 spoken-turn and audio preparation boundary
 
 Model output passes through `spokenText` before recording, repetition/stance

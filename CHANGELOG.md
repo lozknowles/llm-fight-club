@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Phase 8 prepared speech (2026-09-19)
+
+- Add an opt-in prepared-battle interface; seal exact model responses and independent text judging before background speech generation.
+- Add provider-neutral speech capabilities, durable hash-bound audio caching, fixed original-synthetic fighter/host identities, blind projections and separate speech evidence.
+- Add manual/continuous playback, approximate captions, mute/text-only, cancellation and fallback, byte-range WAV playback and a replay-only local viewer.
+- Qualify real local/local, API/API and local/API CSM battles; retain synthetic fixtures as separate regression evidence.
+- Keep keys server-side, exclude private runtime state and voice assets, and document incomplete watermark/export and physical-mobile qualification. No live deployment or new release tag.
+- Handle the existing faster route's declared raw PCM as a complete WAV without silent voice substitution.
+
 ## 1.2.0 — 2026-09-12
 
 - Prepare next-turn audio as well as text while the current speaker plays. No transcript advancement before playback completion. Invalidation on heat, pause, stop, skip and human/model interruptions discards obsolete work.

@@ -12,6 +12,15 @@ Think improvised AI radio with a ringside seat. The dialogue is generated, the v
 
 ## What can I do with it?
 
+### Experimental prepared battles (Phase 8)
+
+An opt-in prepared-battle screen separates exact model answers and text-based judging
+from background speech preparation. CSM supplies stable synthetic Fighter A, Fighter B
+and Mallow voices through a provider-neutral capability interface. Existing conversation
+and Voice Lab flows are unchanged. See [setup, evidence and limitations](docs/PREPARED-BATTLES.md).
+This feature branch is not a production release: watermark/export qualification and
+physical mobile testing remain incomplete. No model checkpoints, recordings or keys are included.
+
 - **Stage a debate:** two opposing characters, with an optional referee.
 - **Play interviewer:** run an interview or cross-examination with distinct personalities.
 - **Host a panel:** an introducer and two panellists tackle your chosen subject.
@@ -27,7 +36,7 @@ This is an experiment in AI conversation, character direction, speech and interr
 
 The ring artwork is an affectionate parody. Grok, ChatGPT, Claude and Gemini are used as recognisable references; this project is not affiliated with or endorsed by their providers or the makers of *Fight Club*. The tagline is a playful adaptation, not a quotation from the film.
 
-**The artwork does not describe the installed integrations.** The current dialogue router uses local OpenAI-compatible chat-completion endpoints. It does not attach API authentication headers or provide native adapters for every brand pictured. Hosted models need a compatible server-side gateway or additional integration work. The basic setup uses a local model and local Flite voices; it needs no paid AI API key. Both characters can use the same model with different personalities.
+**The artwork does not describe the installed integrations.** The dialogue router uses OpenAI-compatible chat-completion endpoints. Optional server-side API credentials support HTTPS routes; this is not a native adapter for every brand pictured. The basic setup uses a local model and local Flite voices; it needs no paid AI API key. Both characters can use the same model with different personalities.
 
 ## Getting started
 

@@ -8,8 +8,27 @@ import { SpeechCapabilityStore } from '../speech/capability-store.mjs';
 import { SpeechCapabilityClient, sha256, canonical } from '../speech/capability-client.mjs';
 import { createSpeechServer } from '../speech/capability-service.mjs';
 import { ModelRouter } from '../lib/model-router.mjs';
+import { sendBattleAudio } from '../lib/prepared-battle-http.mjs';
+import { FastRouteBackend } from '../speech/backends/fast-route.mjs';
+
+test('fast route wraps declared PCM as WAV and rejects silent provider fallback', async () => {
+  const backend = new FastRouteBackend({url:'http://127.0.0.1:18873', request:async () => new Response(Buffer.alloc(48000), {headers:{'x-audio-format':'pcm_s16le_24000_mono'}})});
+  const result = await backend.synthesise({text:'Hello',voice:'fighter-a'});
+  assert.equal(result.bytes.toString('ascii',0,4),'RIFF');
+  assert.equal(result.durationSeconds,1);
+  backend.request = async () => new Response(Buffer.alloc(48000), {headers:{'x-tts-fallback':'true'}});
+  await assert.rejects(backend.synthesise({text:'Hello',voice:'fighter-a'}), /voice_substituted/);
+});
 
 function wav() { const b = Buffer.alloc(48044); b.write('RIFF'); b.writeUInt32LE(b.length-8,4); b.write('WAVEfmt ',8); b.writeUInt32LE(16,16); b.writeUInt16LE(1,20); b.writeUInt16LE(1,22); b.writeUInt32LE(24000,24); b.writeUInt32LE(48000,28); b.writeUInt16LE(2,32); b.writeUInt16LE(16,34); b.write('data',36); b.writeUInt32LE(48000,40); return b; }
+test('audio has finite content length and bounded range support for mobile media', () => {
+  for (const [range, code, size] of [[undefined,200,48044],['bytes=0-99',206,100],['bytes=-100',206,100],['bytes=90000-',416,0],['bytes=x-y',416,0]]) {
+    const headers = {}; let status, body;
+    const res = {setHeader:(k,v)=>headers[k]=v,writeHead:(c,h)=>{status=c;Object.assign(headers,h);},end:b=>body=b};
+    sendBattleAudio({headers:{range}},res,wav()); assert.equal(status,code); assert.equal(body?.length||0,size);
+    if(code!==416)assert.equal(headers['content-length'],size);
+  }
+});
 const caps = { backend: 'fixture', checkpoint: 'checkpoint-1', codecVersion: 'wav-v1', settings: { temperature: .9, seed: 1 }, voices: ['fighter-a','fighter-b','mallow'].map(id => ({ id, revision: `${id}-v1` })) };
 async function setup(t, overrides = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'prepared-fight-')); t.after(() => fs.rm(directory, { recursive:true, force:true }));
@@ -59,7 +78,7 @@ test('real capability HTTP contract: health, auth, cache, evidence and client ha
 async function battleFixture(t, options = {}) {
   const f = await setup(t); const order = [], requested = [];
   const models = { generate: async input => { requested.push(input); order.push('model'); return { text: `  Exact ${requested.length}\nanswer.  `,model:input.model,latencyMs:17,usage:{ total_tokens:12 },provider:'fixture' }; } };
-  const speech = { synthesise: async input => { order.push('speech'); if (options.fail) throw Error('backend_failed'); const value = await f.store.synthesise(input); return { bytes:Buffer.from(value.audio,'base64'), evidence:value.evidence }; } };
+  const speech = { capabilities: () => f.store.capabilities(), synthesise: async input => { order.push('speech'); if (options.fail) throw Error('backend_failed'); const value = await f.store.synthesise(input); return { bytes:Buffer.from(value.audio,'base64'), evidence:value.evidence }; } };
   const engine = new PreparedBattles({ directory:path.join(f.directory,'battles'),modelIds:['local-a','local-b','api-a','api-b'],models,speech,
     judge:async (_models,b) => { order.push('judge'); assert.equal(b.presentation.length,0); return { score_a:8,score_b:6,winner:'A',reason:'Reasoning.',judge_model:'judge-secret' }; } });
   await engine.restore(); return { ...f, engine, order, requested };

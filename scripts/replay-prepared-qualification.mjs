@@ -1,0 +1,11 @@
+import path from 'node:path';
+if (!process.env.PREPARED_REPLAY_DATA) throw Error('Set PREPARED_REPLAY_DATA to the copied app-data directory');
+process.env.FIGHT_CLUB_DATA_DIR = path.resolve(process.env.PREPARED_REPLAY_DATA);
+process.env.FIGHT_CLUB_PREPARED_ENABLED = '1';
+process.env.FIGHT_CLUB_PREPARED_REPLAY_ONLY = '1';
+process.env.HOST = '127.0.0.1';
+process.env.PORT = process.env.PREPARED_REPLAY_PORT || '18894';
+process.env.VOICE_LAB_ENABLED = '0';
+delete process.env.AGENT_CONTROL_SPEECH_TOKEN;
+delete process.env.AGENT_CONTROL_SPEECH_URL;
+await import('../server-spoken.mjs');
