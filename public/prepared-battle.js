@@ -120,6 +120,7 @@ try {
   for (const id of ['modelA','modelB']) for (const name of config.models) { const option = document.createElement('option'); option.value = name; option.textContent = name; $(id).append(option); }
   if (config.models.length > 1) $('modelB').selectedIndex = 1;
   replayOnly = config.replayOnly; $('run').disabled = replayOnly;
+  $('studioLink').hidden = Boolean(replayOnly);
   $('status').textContent = `${replayOnly ? 'Read-only evidence replay' : `CSM service: ${config.speechHealth.state}`}. No audio will play until you press Play or Watch.`;
   const id = new URL(location.href).searchParams.get('battle');
   if (id && /^[a-f0-9-]{36}$/.test(id)) { battle = await api(`/${id}`); $('setup').open = false; render(); }

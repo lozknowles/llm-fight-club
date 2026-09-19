@@ -29,8 +29,11 @@ try { routes = JSON.parse(process.env.FIGHT_CLUB_MODEL_ROUTES || '{}'); } catch 
 const models = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_URL || 'http://127.0.0.1:18780/v1', routes,
   apiKeys: JSON.parse(process.env.FIGHT_CLUB_MODEL_API_KEYS || '{}') });
 const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:18772';
-const preparedBattle = await preparedBattleRoutes({ directory: path.join(dataDir, 'prepared-battles'), models,
-  modelIds: Object.keys(routes).length ? Object.keys(routes) : ['qwen3-8b'], enabled: process.env.FIGHT_CLUB_PREPARED_ENABLED === '1',
+const preparedRoutes = JSON.parse(process.env.FIGHT_CLUB_PREPARED_MODEL_ROUTES || JSON.stringify(routes));
+const preparedModels = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_URL || 'http://127.0.0.1:18780/v1', routes: preparedRoutes,
+  apiKeys: JSON.parse(process.env.FIGHT_CLUB_PREPARED_MODEL_API_KEYS || process.env.FIGHT_CLUB_MODEL_API_KEYS || '{}') });
+const preparedBattle = await preparedBattleRoutes({ directory: path.join(dataDir, 'prepared-battles'), models: preparedModels,
+  modelIds: Object.keys(preparedRoutes).length ? Object.keys(preparedRoutes) : ['qwen3-8b'], enabled: process.env.FIGHT_CLUB_PREPARED_ENABLED === '1',
   speechUrl: process.env.AGENT_CONTROL_SPEECH_URL, speechToken: process.env.AGENT_CONTROL_SPEECH_TOKEN, fastUrl: speechBaseUrl,
   replayOnly: process.env.FIGHT_CLUB_PREPARED_REPLAY_ONLY === '1' });
 const conversations = new Map();
