@@ -1,0 +1,20 @@
+.speaker-stage{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:8px}
+.speaker-card{--speaker:#63d2ff;display:flex;align-items:center;gap:8px;border:1px solid #625563;border-radius:12px;background:#17131a;padding:6px;min-width:0;transition:border-color .2s,background .2s}
+.speaker-colour-1{--speaker:#ff6b9a}.speaker-colour-2{--speaker:#ffd166}
+.speaker-head{width:62px;height:62px;flex:none;overflow:visible}.speaker-head .face{fill:#292430;stroke:var(--speaker);stroke-width:2}
+.speaker-head .headset,.speaker-head .brow{fill:none;stroke:var(--speaker);stroke-width:3;stroke-linecap:round}
+.speaker-head .eyes,.speaker-head .mouth,.speaker-head .ear{fill:var(--speaker)}
+.speaker-info{min-width:0;display:flex;flex-direction:column}.speaker-info strong{font-size:.85rem;overflow-wrap:anywhere}.speaker-info small{font-size:.67rem;color:#bbaabd}.speaker-state{font-size:.72rem;color:#f4ead8}
+.speaker-dots{opacity:0;color:var(--speaker);font-size:1.1rem;margin-left:auto;letter-spacing:2px}
+.speaker-card[data-activity="speaking"]{border-color:var(--speaker);background:#302633;box-shadow:inset 0 0 0 1px var(--speaker)}
+.speaker-card[data-activity="speaking"] .mouth{transform-box:fill-box;transform-origin:center;animation:talk-mouth .24s ease-in-out infinite alternate}
+.speaker-card[data-activity="speaking"] .speaker-head{animation:talk-nod 1.1s ease-in-out infinite alternate}
+.speaker-card[data-activity="preparing"] .speaker-dots{opacity:1;animation:think-pulse 1s ease-in-out infinite alternate}
+.speaker-stage-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:.72rem}
+.speaker-stage-heading label{margin:0;display:flex;align-items:center;gap:5px;font-size:.7rem}.speaker-stage-heading input{width:auto}
+@keyframes talk-mouth{0%{transform:scaleY(.5)}55%{transform:scaleY(2.8)}100%{transform:scaleY(1.1)}}
+@keyframes talk-nod{to{transform:rotate(2deg) translateY(-1px)}}
+@keyframes think-pulse{to{opacity:.25;transform:translateY(-2px)}}
+[data-motion="off"] .speaker-head,[data-motion="off"] .mouth,[data-motion="off"] .speaker-dots{animation:none!important}
+@media(prefers-reduced-motion:reduce){.speaker-head,.mouth,.speaker-dots{animation:none!important}.speaker-card{transition:none}}
+@media(max-width:600px){.speaker-stage{grid-template-columns:repeat(2,minmax(0,1fr))}.speaker-head{width:42px;height:48px}.speaker-card{gap:4px;padding:4px}.speaker-info strong{font-size:.75rem}.speaker-state{font-size:.65rem}.speaker-dots{letter-spacing:0}.speaker-stage-heading{flex-wrap:wrap}}

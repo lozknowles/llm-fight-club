@@ -4,6 +4,11 @@
 
 ### Listen again
 
+The fixed Conversation Heat panel also shows each participant as an original
+animated headset character. A talking mouth indicates current playback, not a
+model merely generating text. Preparation, listening and paused states are labelled.
+Use **Animate speakers** to disable movement; reduced-motion preferences are honoured.
+
 On the main Studio page, open **Saved conversations — listen again** to revisit a
 recording, or bookmark its conversation link. **Play whole conversation** plays
 the saved turns in order; each turn also has a **Replay turn** button. The audio

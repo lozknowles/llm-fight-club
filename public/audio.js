@@ -2,6 +2,7 @@ import { pcmS16leToWav } from './audio-format.js';
 import { controlAvailability } from './control-state.js';
 import { playbackDuration } from './playback-duration.js';
 import { ArchiveReplay } from './archive-replay.js';
+import { SpeakerStage } from './speaker-stage.js';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -15,6 +16,9 @@ if (disclosure) disclosure.textContent = 'AI-generated synthetic voices · turn-
 let config;
 let conversation;
 let archivedView = false;
+let activityPhase='idle',activitySince=performance.now(),replayActivity=null;
+const speakerStage=new SpeakerStage($('#speakerStage'));
+function setActivity(phase){activityPhase=phase;activitySince=performance.now();}
 let voices = [];
 let voiceOptions = [];
 let voiceProfiles = [];
@@ -40,6 +44,7 @@ const archivePlayer = $('#archivePlayer');
 const replay = new ArchiveReplay(archivePlayer, {
   url: (id, turn) => endpoint(`/api/conversations/${id}/playback/${turn}.wav`),
   onState: ({state,index,count,turn}) => {
+    replayActivity=turn?{state,turn,since:performance.now()}:null;
     $('#replayStatus').textContent = `${state}${turn ? ` · saved turn ${index+1}/${count} · ${turn.speaker}` : ''}`;
     $('#replayCaption').textContent = turn?.text || '';
     $('#replaySkip').disabled = index < 0 || index + 1 >= count;
@@ -49,6 +54,26 @@ const replay = new ArchiveReplay(archivePlayer, {
   },
 });
 const canReplay = () => archivedView || ['COMPLETED','STOPPED','ERROR','PAUSED'].includes(conversation?.state);
+function refreshSpeakers(){
+  if(!conversation)return;
+  $('#speakerPresentation').hidden=false;
+  let state=conversation.state,phase=activityPhase,speakerId=currentTurn?.speaker_id,audible=false;
+  if(replayActivity){
+    speakerId=replayActivity.turn.speaker_id;
+    audible=!archivePlayer.paused && !archivePlayer.ended && archivePlayer.readyState>=3;
+    state=archivePlayer.ended?'COMPLETED':replayActivity.state==='Paused'?'PAUSED':'ACTIVE';
+    phase=replayActivity.state.startsWith('Loading')?'voice':'idle';
+  } else if(archivedView){state='COMPLETED';phase='idle';}
+  else if(!settled && conversation.awaitingPlayback && state!=='PAUSED'){
+    const pcmAudible=audioContext?.state==='running' && activeSources.some(s=>audioContext.currentTime>=s.presentationStart && audioContext.currentTime<s.presentationEnd);
+    audible=Boolean(pcmAudible || (!player.paused && !player.ended && player.readyState>=3));
+  }
+  const view=speakerStage.render({participants:conversation.participants,state,phase,speakerId,audible,elapsed:(performance.now()-(replayActivity?.since??activitySince))/1000});
+  if($('#speakerStageStatus').textContent!==view.heading)$('#speakerStageStatus').textContent=view.heading;
+  if($('#speakerStageElapsed').textContent!==view.elapsed)$('#speakerStageElapsed').textContent=view.elapsed;
+}
+$('#animateSpeakers').onchange=()=>{$('#speakerStage').dataset.motion=$('#animateSpeakers').checked?'on':'off';};
+setInterval(refreshSpeakers,150);
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 const audioContext = AudioContextClass ? new AudioContextClass({ latencyHint: 'interactive', sampleRate: 24000 }) : null;
 const speechGain = audioContext ? audioContext.createGain() : null;
@@ -282,6 +307,7 @@ async function streamPcm(response, began, generation) {
     source.buffer = buffer;
     source.connect(speechGain || audioContext.destination);
     const startAt = Math.max(scheduledEnd, audioContext.currentTime + 0.025);
+    source.presentationStart=startAt;source.presentationEnd=startAt+buffer.duration;
     source.start(startAt);
     scheduledEnd = startAt + buffer.duration;
     activeSources.push(source);
@@ -333,6 +359,7 @@ async function playContainer(response, began, generation, turnId) {
 
 async function speech(turn, generation) {
   currentTurn = turn;
+  setActivity('voice');
   if (speechGain) speechGain.gain.value = 1;
   const began = performance.now();
   streamAbort = new AbortController();
@@ -437,6 +464,7 @@ function participant(card) {
 
 function render() {
   if (!conversation) return;
+  refreshSpeakers();
   renderHeat(conversation.conversationHeat);
   const csmCount=conversation.participants.filter(p=>p.voice.startsWith('csm-')).length;
   const displayedProfile=csmCount ? (csmCount===conversation.participants.length?'CSM':'MIXED VOICES') : (conversation.speechProfile||speechProfile);
@@ -494,6 +522,7 @@ function escapeHtml(value) {
 }
 
 function stopAudio() {
+  setActivity('idle');
   playbackGeneration++;
   player.onended = null; player.onplay = null; player.onerror = null;
   clearBargeMonitor();
@@ -510,6 +539,7 @@ async function finish(skipped = false, expectedTurnId = currentTurn?.turn_id) {
   if (expectedTurnId !== currentTurn?.turn_id || (!skipped && !startedAt)) return;
   if (settled) return;
   settled = true;
+  setActivity('idle');
   clearBargeMonitor();
   if (completionWatch) clearInterval(completionWatch);
   completionWatch = null;
@@ -549,6 +579,7 @@ async function play(turn) {
     if (error.name === 'AbortError' || generation !== playbackGeneration) return;
     stopAudio();
     $('#error').textContent = `${error.message}. Use “Skip speech” to continue.`;
+    setActivity('error');
     $('#status').textContent = `${conversation.format} · VOICE ERROR · ${conversation.transcript.length}/${conversation.turnLimit}`;
     $('#retry').hidden = false;
   }
@@ -557,6 +588,7 @@ async function play(turn) {
 async function next() {
   if (!conversation || conversation.awaitingPlayback || ['PAUSED', 'COMPLETED', 'STOPPED'].includes(conversation.state)) return;
   $('#status').textContent = 'Preparing next speaker…';
+  setActivity('response');
   $('#retry').hidden = true;
   try {
     const result = await api(`/api/conversations/${conversation.id}/next`, 'POST', {});
@@ -575,6 +607,7 @@ async function next() {
   } catch (error) {
     $('#error').textContent = error.message;
     $('#status').textContent = `${conversation.format} · RESPONSE ERROR · retry is available`;
+    setActivity('error');
     $('#retry').hidden = false;
   }
 }

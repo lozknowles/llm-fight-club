@@ -3,6 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Spoken AI Studio — Server Audio</title>
+<link rel="stylesheet" href="speaker-stage.css">
 <style>
   :root{font-family:Inter,system-ui;color:#f4ead8;background:#110f13}
   [hidden]{display:none!important}
@@ -52,6 +53,10 @@
     <input id="conversationHeat" type="range" min="1" max="5" step="1" value="3" aria-label="Conversation heat from docile to furious">
     <div class="heat-scale" aria-hidden="true"><span>Docile</span><span>Calm</span><span>Balanced</span><span>Heated</span><span>Furious</span></div>
     <p class="meta">Change this live. Hotter settings increase direct counterarguments, expressive emphasis and contextual barge-in; human grenades still take priority.</p>
+    <div id="speakerPresentation" hidden>
+      <div class="speaker-stage-heading"><span><span id="speakerStageStatus">Ready</span> <span id="speakerStageElapsed" aria-hidden="true"></span></span><label><input id="animateSpeakers" type="checkbox" checked>Animate speakers</label></div>
+      <div id="speakerStage" class="speaker-stage" aria-label="Participant activity"></div>
+    </div>
   </section>
   <form id="setup" class="card">
     <div class="grid">

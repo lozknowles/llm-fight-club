@@ -1,5 +1,11 @@
 # Changelog
 
+## Participant activity heads — 2026-09-19
+
+- Add original illustrated headset avatars to the fixed conversation panel for every selected participant, including hosts/referees.
+- Animate talking only during audible media/PCM playback; distinguish listening, response preparation, voice preparation, pause, completion and errors. Show elapsed preparation time without predicting an unknown next speaker.
+- Apply the same activity display to saved replay. Support explicit animation opt-out and reduced-motion preferences. Avatars indicate activity, not phoneme-level lip sync, and never alter synthesis or judging.
+
 ## Saved conversation replay — 2026-09-19
 
 - Add a recent saved-conversation picker and bookmarkable, read-only conversation pages.

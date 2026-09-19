@@ -230,6 +230,13 @@ The application router is a qualified prototype, not a replacement for Agent Con
 
 ### Saved conversation playback
 
+`SpeakerStage` is a UI-only activity projection. A 150ms presentation sampler
+reads current media state or actual scheduled PCM playback windows. Only the
+audible participant is marked as talking; pending generation is not audio. It
+also consumes saved-replay events. No extra LLM/TTS calls or transcript writes
+are involved. CSS illustrations are original synthetic avatars, not portraits;
+mouth movement signals speech activity rather than exact lip synchronization.
+
 `ArchiveReplay` is a presentation-only controller on a separate HTML audio element.
 It reads existing per-turn WAVs in transcript order and never invokes generation,
 judging or live playback acknowledgements. Replay is available after completion,
