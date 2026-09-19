@@ -60,6 +60,25 @@ No credentials or cookies were copied into qualification scripts to bypass MFA.
 
 ## Recovery
 
+### Saved replay follow-up
+
+The main conversation page now lists recent saved conversations and supports
+bookmarkable read-only views, whole-conversation/per-turn replay, explicit pause,
+resume, skip, stop, playback speed and current-turn captions. Saved views do not
+load the live voice catalogue. CSM replay reads the persisted WAVs and verifies
+their audio hashes; it does not relax the separate download qualification gate.
+
+All 114 Linux tests passed. Signed-in external browser qualification replayed
+`0c51d5a9-3cc3-482d-973c-38d1e17856fb` through all four saved turns to Finished,
+including pause/resume and 1.5x speed, then verified individual replay, skip and
+stop. The conversation JSON hash remained
+`77ff8b806e34bb0d73a662cbc952865ee222067fafae8739bdb14661e32354ff`.
+Protected model health remained OK, and the existing CSM worker was not restarted.
+The in-app browser crashed during an initial native media-control automation
+attempt; the subsequent explicit application transport controls passed. Physical
+mobile/Safari testing remains pending. Anonymous catalogue requests still redirect
+to the private-hub login. Git history and working files passed credential scanning.
+
 The deployment manifest and environment files are in
 `/fast/work/llm-fight-club-csm-private-20260919`, outside source control. They contain
 private configuration and must not be attached to issues or logs.

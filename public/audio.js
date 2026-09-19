@@ -749,14 +749,6 @@ $$('.preview').forEach((button) => {
   };
 });
 
-config = await api('/api/config');
-renderHeat();
-const voiceResponse = await fetch(`${ttsBase}/voices`).then((response) => response.json());
-voices = voiceResponse.voices;
-voiceOptions = voiceResponse.voiceOptions || voices.map((id) => ({ id, label: id }));
-voiceProfiles = voiceResponse.voiceProfiles || [];
-configure();
-fill();
 try {
   const saved=await api('/api/conversations');
   $('#savedConversations').replaceChildren(new Option('Choose a saved conversation…',''),...saved.map(c=>new Option(`${c.createdAt.slice(0,16).replace('T',' ')} · ${c.premise} · ${c.savedAudioCount} saved audio turns`,c.id)));
@@ -767,3 +759,17 @@ try {
     $('#status').textContent+=' · SAVED VIEW (no generation)';
   }
 } catch(error) { $('#error').textContent=`Saved conversations: ${error.message}`; }
+// Saved replay does not depend on the live model/voice catalogue being online.
+if (!archivedView) {
+  try {
+    config = await api('/api/config');
+    renderHeat();
+    const response = await fetch(`${ttsBase}/voices`);
+    if(!response.ok) throw Error('Live voice catalogue unavailable; saved replay is still available above.');
+    const voiceResponse = await response.json();
+    voices = voiceResponse.voices;
+    voiceOptions = voiceResponse.voiceOptions || voices.map((id) => ({ id, label: id }));
+    voiceProfiles = voiceResponse.voiceProfiles || [];
+    configure(); fill();
+  } catch(error) { $('#error').textContent=error.message; }
+}
