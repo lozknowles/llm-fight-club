@@ -18,8 +18,9 @@ An opt-in prepared-battle screen separates exact model answers and text-based ju
 from background speech preparation. CSM supplies stable synthetic Fighter A, Fighter B
 and Mallow voices through a provider-neutral capability interface. Existing conversation
 and Voice Lab flows are unchanged. See [setup, evidence and limitations](docs/PREPARED-BATTLES.md).
-This feature branch is not a production release: watermark/export qualification and
-physical mobile testing remain incomplete. No model checkpoints, recordings or keys are included.
+This feature branch is available for authenticated private testing; it is not a general
+production release. Watermark/export qualification and physical mobile testing remain
+incomplete. No model checkpoints, recordings or keys are included.
 
 - **Stage a debate:** two opposing characters, with an optional referee.
 - **Play interviewer:** run an interview or cross-examination with distinct personalities.

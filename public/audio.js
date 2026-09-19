@@ -391,7 +391,8 @@ function fill() {
   const premiumDefaults = ['eleven-interviewer', 'eleven-guest', 'eleven-host'];
   const liveDefaults = ['live-interviewer', 'live-guest', 'live-host'];
   const omniDefaults = ['omnivoice-moderator', 'omnivoice-challenger', 'omnivoice-analyst'];
-  const defaults = speechProfile.toUpperCase() === 'OMNIVOICE' && omniDefaults.every((id) => voices.includes(id))
+  const csmDefaults = ['csm-fighter-a', 'csm-fighter-b', 'csm-mallow'];
+  const defaults = speechProfile.toUpperCase() === 'CSM' && csmDefaults.every(id=>voices.includes(id)) ? csmDefaults : speechProfile.toUpperCase() === 'OMNIVOICE' && omniDefaults.every((id) => voices.includes(id))
     ? omniDefaults : liveDefaults.every((id) => voices.includes(id)) ? liveDefaults : premiumDefaults;
   $$('.voice').forEach((select, index) => { select.value = defaults[index] || voices[index]; });
   $$('.personality').forEach((select) => {
@@ -438,7 +439,7 @@ function render() {
     const live = index === conversation.transcript.length - 1 && conversation.awaitingPlayback
       ? ` · first playable ${metrics.first_playable_ms ?? 'waiting'} ms · provider ${metrics.provider || 'routing'}`
       : '';
-    const audio = turn.audio_file ? ` · <a href="${endpoint(`/api/conversations/${conversation.id}/audio/${turn.turn_id}.wav`)}" download="turn-${turn.turn_index + 1}.wav">WAV</a>` : '';
+    const audio = turn.audio_file && turn.audio_export_allowed !== false ? ` · <a href="${endpoint(`/api/conversations/${conversation.id}/audio/${turn.turn_id}.wav`)}" download="turn-${turn.turn_index + 1}.wav">WAV</a>` : '';
     const interruption = turn.programme_introduction ? ' · programme introduction' : turn.interrupted ? ` · interrupted by ${escapeHtml(turn.interrupted_by_name || 'listener')}` : turn.autonomous_interruption ? ' · autonomous interruption' : turn.interruption_reaction ? ' · interruption response' : '';
     return `<article class="turn ${speaking}" style="--accent:${['#63d2ff', '#ff6b9a', '#ffd166'][participantIndex % 3]}">
       <b>${escapeHtml(turn.speaker)}</b> <span class="meta">${escapeHtml(turn.role)} · ${escapeHtml(turn.model)} · voice ${escapeHtml(turn.voice)} · voice speed ${turn.speech_rate || 1}×</span>

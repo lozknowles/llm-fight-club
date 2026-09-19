@@ -7,19 +7,24 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { pcmS16leToWav } from '../public/audio-format.js';
 import { PERSONALITIES } from '../lib/conversation-engine.mjs';
+import { sha256 } from '../speech/capability-client.mjs';
 
 async function waitFor(predicate) {
   for (let i = 0; i < 200; i++) { if (predicate()) return; await new Promise(r => setTimeout(r, 10)); }
   throw Error('Fixture timed out');
 }
-async function fixture(t) {
+async function fixture(t, capability = false) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'spoken-prefetch-test-'));
   const state = { calls: [], gate: null, fallback: false };
   const wav = Buffer.from(pcmS16leToWav(Buffer.alloc(24000 * 2 * 4)));
+  const caps={backend:'fixture-csm',checkpoint:'checkpoint',codecVersion:'wav-v1',settings:{seed:1},voices:['fighter-a','fighter-b','mallow'].map((id,i)=>({id,revision:String(i+1).repeat(64),provenance:'original-generated-synthetic'}))};
   const fake = http.createServer(async (req, res) => {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const p = JSON.parse(raw || '{}');
-    if (req.url.endsWith('/chat/completions')) {
+    if(req.url==='/speech.capabilities'){res.setHeader('content-type','application/json');res.end(JSON.stringify(caps));}
+    else if(req.url==='/speech.synthesise'){
+      state.calls.push(p);res.setHeader('content-type','application/json');res.end(JSON.stringify({audio:wav.toString('base64'),evidence:{backend:caps.backend,checkpoint:caps.checkpoint,codecVersion:caps.codecVersion,settings:caps.settings,voiceIdentity:caps.voices.find(v=>v.id===p.voice),audioHash:sha256(wav),transcriptHash:sha256(p.text),generationLatencyMs:10,audioDurationSeconds:4,realTimeFactor:.0025,watermark:'NOT_APPLIED'}}));
+    } else if (req.url.endsWith('/chat/completions')) {
       const system = p.messages[0].content;
       const content = system.includes('private conversation director') ? 'Clarify the claim.'
         : system.includes('evaluator') ? 'YES'
@@ -41,6 +46,7 @@ async function fixture(t) {
   const app = spawn(process.execPath, ['server-spoken.mjs'], { cwd: new URL('..', import.meta.url), env: {
     ...process.env, HOST: '127.0.0.1', PORT: '0', FIGHT_CLUB_DATA_DIR: dir,
     FIGHT_CLUB_SPEECH_URL: upstream, FIGHT_CLUB_MODEL_URL: upstream,
+    FIGHT_CLUB_PREPARED_ENABLED:capability?'1':'0',AGENT_CONTROL_SPEECH_URL:upstream,AGENT_CONTROL_SPEECH_TOKEN:'fixture-only-'.repeat(4),
     FIGHT_CLUB_MODEL_ROUTES: '{}', VOICE_LAB_ENABLED: '0', VOICE_LAB_SYNTHETIC_VOICES: '', VOICE_LAB_WORKER_URL: '',
   }, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = ''; app.stdout.on('data', c => { output += c; }); app.stderr.resume();
@@ -49,12 +55,26 @@ async function fixture(t) {
   const base = output.match(/http:\/\/127.0.0.1:\d+/)[0];
   const post = (route, input = {}) => fetch(base + route, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
   const c = await (await post('/api/conversations', { format: 'INTERVIEW', premise: 'Should we change our conclusion?', turnLimit: 4, turnLength: 30, speechMode: 'server', conversationHeat: 'CALM',
-    participants: [{ name: 'Alfie Rook', role: 'interviewer', model: 'fixture', voice: 'v0', personality: PERSONALITIES[0] }, { name: 'Cedric Pump', role: 'guest', model: 'fixture', voice: 'v1', personality: PERSONALITIES[1] }] })).json();
+    participants: [{ name: 'Alfie Rook', role: 'interviewer', model: 'fixture', voice: capability?'csm-fighter-a':'v0', personality: PERSONALITIES[0] }, { name: 'Cedric Pump', role: 'guest', model: 'fixture', voice: capability?'csm-fighter-b':'v1', personality: PERSONALITIES[1] }] })).json();
   const route = `/api/conversations/${c.id}`;
   const next = async () => (await post(route + '/next')).json();
   const speech = turn => post('/tts/stream', { conversationId: c.id, turnId: turn.turn_id, text: turn.text, voice: turn.voice });
   return { state, post, c, route, next, speech, base };
 }
+
+test('main HTTP voice catalogue and conversation use generic CSM capability with persisted evidence and export gate',async t=>{
+ const f=await fixture(t,true);
+ const menu=await(await fetch(f.base+'/tts/voices')).json();
+ assert.ok(menu.voices.includes('csm-mallow'));assert.ok(menu.voices.includes('v0'));
+ const first=(await f.next()).turn;const response=await f.speech(first);
+ assert.equal(response.status,200);assert.equal(response.headers.get('x-tts-provider'),'fixture-csm');await response.arrayBuffer();
+ await new Promise(r=>setTimeout(r,30));
+ const c=await(await fetch(f.base+f.route)).json();
+ assert.equal(c.transcript[0].speech_evidence.transcriptHash,sha256(first.text));assert.equal(c.transcript[0].audio_export_allowed,false);
+ assert.equal((await fetch(`${f.base}${f.route}/audio/${first.turn_id}.wav`)).status,403);
+ assert.equal((await fetch(`${f.base}${f.route}/conversation.mp3`)).status,403);
+ assert.equal(f.state.calls[0].voice,'fighter-a');
+});
 
 test('real HTTP pipeline prepares next speech before completion, strips posture and reuses the audio', async t => {
   const f = await fixture(t), first = (await f.next()).turn;

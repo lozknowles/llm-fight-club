@@ -18,6 +18,13 @@ service requires a bearer token; the battle interface must remain behind the exi
 private access boundary. Browser configuration never receives model API keys or the
 speech token. See [prepared-battle operations and evidence](docs/PREPARED-BATTLES.md).
 
+The private testing deployment uses a dedicated systemd-managed CSM capability service
+and a release-specific override for the existing internal application. Prepared models
+can use `FIGHT_CLUB_PREPARED_MODEL_ROUTES` / `FIGHT_CLUB_PREPARED_MODEL_API_KEYS` without
+changing the conversation model catalogue. The private hub's existing authentication
+proxy guards both the HTML and API. Public-site routing and recorded-voice storage are
+unchanged. Deployment credentials, anchors, cache and rollback metadata are outside Git.
+
 ## 1.2 spoken-turn and audio preparation boundary
 
 Model output passes through `spokenText` before recording, repetition/stance

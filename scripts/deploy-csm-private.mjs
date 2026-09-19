@@ -21,7 +21,7 @@ const envFor = async pid => Object.fromEntries((await fs.readFile(`/proc/${pid}/
 const envText = values => Object.entries(values).map(([k,v])=>`${k}="${String(v).replaceAll('\\','\\\\').replaceAll('"','\\"').replaceAll('\n','\\n')}"`).join('\n')+'\n';
 const manifestFile = path.join(privateDir,'deployment.json');
 const mode = process.argv[2];
-if (!['prepare','activate','rollback','status'].includes(mode)) throw Error('Choose prepare, activate, rollback or status');
+if (!['prepare','activate','promote','rollback','status'].includes(mode)) throw Error('Choose prepare, activate, promote, rollback or status');
 if (!release.startsWith('/fast/releases/spoken-ai-studio-csm-')) throw Error('Must run from immutable CSM release checkout');
 if (execFileSync('git',['status','--porcelain'],{cwd:release,encoding:'utf8'}).trim()) throw Error('Release checkout must be clean');
 
@@ -60,8 +60,24 @@ if (mode === 'prepare') {
   console.log(JSON.stringify({prepared:true,commit:manifest.commit,persistentDataPreserved:true,privateOnly:true}));
 } else {
   const m=JSON.parse(await fs.readFile(manifestFile,'utf8'));
-  if(m.release!==release)throw Error('Release identity changed');
-  if(mode==='activate') {
+  if(m.release!==release&&mode!=='promote')throw Error('Release identity changed');
+  if(mode==='promote') {
+    if(!m.activated)throw Error('No active CSM deployment to promote');
+    const previous=await fs.readFile(dropin,'utf8');
+    if(sha(previous)!==m.dropinHash||run('show',appUnit,'-p','WorkingDirectory','--value')!==m.release)throw Error('Active app configuration drift');
+    const updated=previous.replaceAll(m.release,release),backup=path.join(privateDir,`app-dropin-before-${Date.now()}.conf`);
+    await fs.writeFile(backup,previous,{mode:0o600,flag:'wx'});
+    await fs.writeFile(dropin+'.next',updated,{mode:0o600,flag:'wx'});await fs.rename(dropin+'.next',dropin);
+    try{
+      run('daemon-reload');run('restart',appUnit);await wait(2000);
+      const r=await fetch('http://100.125.120.114:18871/tts/voices'),catalog=await r.json();
+      if(!r.ok||!['csm-fighter-a','csm-fighter-b','csm-mallow'].every(v=>catalog.voices.includes(v)))throw Error('New voice menu not ready');
+      m.releases||=[];m.releases.push({release:m.release,commit:m.commit,backup});
+      m.speechRelease||=m.release;m.release=release;m.commit=execFileSync('git',['rev-parse','HEAD'],{cwd:release,encoding:'utf8'}).trim();m.dropinHash=sha(updated);m.promotedAt=new Date().toISOString();
+      await fs.writeFile(manifestFile,JSON.stringify(m,null,2),{mode:0o600});
+      console.log(JSON.stringify({promoted:true,commit:m.commit,csmVoices:3,workerRestarted:false}));
+    }catch(e){await fs.writeFile(dropin,previous,{mode:0o600});run('daemon-reload');run('restart',appUnit);throw Error('Promotion failed; previous app restored');}
+  } else if(mode==='activate') {
     if(m.activated)throw Error('Already activated');
     if(Number(run('show',appUnit,'-p','MainPID','--value'))!==m.oldAppPid)throw Error('Internal service changed since preparation');
     const unit=await fs.readFile(path.join(privateDir,'speech.service'),'utf8'),override=await fs.readFile(path.join(privateDir,'app-dropin.conf'),'utf8');

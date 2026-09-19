@@ -2,7 +2,8 @@
 
 ## Status and boundary
 
-This is an opt-in feature branch, not a production release or a live deployment.
+This is an opt-in feature branch, now deployed for authenticated private testing,
+not a general production release. See [deployment evidence](CSM-PRIVATE-DEPLOYMENT.md).
 The existing battle/conversation, judging, scoring, transcripts and Voice Lab code paths
 are preserved. Prepared battles add a separate, bounded workflow (one to three rounds)
 using the existing judge-score validation contract. Judging remains an LLM opinion.
@@ -28,6 +29,7 @@ Server-only variables:
 - `AGENT_CONTROL_SPEECH_TOKEN`: private bearer token, at least 32 characters.
 - `FIGHT_CLUB_MODEL_ROUTES`: JSON model-name to OpenAI-compatible endpoint map.
 - `FIGHT_CLUB_MODEL_API_KEYS`: optional JSON model-name to secret map; authenticated routes require HTTPS.
+- `FIGHT_CLUB_PREPARED_MODEL_ROUTES` / `FIGHT_CLUB_PREPARED_MODEL_API_KEYS`: optional prepared-battle-only overrides, leaving legacy conversation models unchanged.
 - `FIGHT_CLUB_DATA_DIR`: private persistent battle/evidence/audio storage outside the checkout.
 - `FIGHT_CLUB_PREPARED_REPLAY_ONLY=1`: disable generation/configuration mutations in a copied replay viewer.
 
@@ -81,7 +83,7 @@ This is not a guarantee against arbitrary identifying content or stylometric inf
 | MOBILE PLAYBACK | 390px Chromium layout and byte-range media verified; physical phone/Safari testing pending |
 | WATERMARK/EVIDENCE | Hash-bound evidence retained; watermark NOT_APPLIED; application downloads disabled |
 | END-TO-END SPOKEN BATTLE | Six clips played continuously in browser without media errors, with independent text judging |
-| PRODUCTION READINESS | Experimental; no production deployment; remaining gates below |
+| PRODUCTION READINESS | Experimental private testing deployment; not qualified for unrestricted production; remaining gates below |
 
 Real model matrix (not fixtures):
 
@@ -111,7 +113,8 @@ That did not enable application downloads, change source evidence or publish aud
 - Captions use duration-based approximation, not forced alignment or word timestamps.
 - This is prepared turn-based speech, not low-latency streaming or full duplex.
 - The final cache-binding/range/PCM hardening has automated coverage; the complete
-  three-battle live matrix was run before those final hardening changes.
+  three-battle matrix was run before those final hardening changes. The subsequent
+  private deployment runs a fresh local-model CSM battle against the hardened release.
 - Two optional Agent Control adapter tests and its targeted typecheck passed; the
   full Agent Control typecheck encountered an unrelated missing `undici` dependency.
 

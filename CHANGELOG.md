@@ -1,12 +1,23 @@
 # Changelog
 
+## Private CSM testing deployment — 2026-09-19
+
+- Also expose clearly named CSM Fighter A, Fighter B and Mallow choices in the main conversation voice menu. `?profile=CSM` selects CSM defaults; recorded and OmniVoice defaults are preserved.
+- Pin main-conversation capability identities, retain exact speech evidence and label speed transforms; preserve the pending CSM watermark/export restriction in both interfaces.
+
+- Deploy prepared-battle creation behind the existing private hub and SMS login, alongside the existing conversation UI; the older public deployment is unchanged.
+- Add a managed, loopback-only CSM capability service using the qualified checkpoint, fixed anchors and persistent cache. Preserve conversation data and recorded-voice profiles.
+- Separate prepared-battle local/API model configuration from legacy conversation settings. Hide the main-app link in replay-only previews to avoid an unusable setup screen.
+- Add a site-specific, identity-checked deployment/rollback helper. Private runtime credentials stay outside Git with restricted permissions.
+- The immutable application release passed 105/105 Linux tests. See the private deployment report for live qualification and remaining limits.
+
 ## Unreleased — Phase 8 prepared speech (2026-09-19)
 
 - Add an opt-in prepared-battle interface; seal exact model responses and independent text judging before background speech generation.
 - Add provider-neutral speech capabilities, durable hash-bound audio caching, fixed original-synthetic fighter/host identities, blind projections and separate speech evidence.
 - Add manual/continuous playback, approximate captions, mute/text-only, cancellation and fallback, byte-range WAV playback and a replay-only local viewer.
 - Qualify real local/local, API/API and local/API CSM battles; retain synthetic fixtures as separate regression evidence.
-- Keep keys server-side, exclude private runtime state and voice assets, and document incomplete watermark/export and physical-mobile qualification. No live deployment or new release tag.
+- Keep keys server-side, exclude private runtime state and voice assets, and document incomplete watermark/export and physical-mobile qualification. The initial qualification did not deploy or create a release tag; the later private deployment is recorded above.
 - Handle the existing faster route's declared raw PCM as a complete WAV without silent voice substitution.
 
 ## 1.2.0 — 2026-09-12

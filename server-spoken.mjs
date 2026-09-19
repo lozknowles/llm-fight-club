@@ -19,6 +19,7 @@ import { FixedOmniVoiceProvider } from './speech/providers/fixed-omnivoice-provi
 import { spokenText } from './lib/spoken-text.mjs';
 import { validateBoutScore } from './lib/voice-lab-judge.mjs';
 import { preparedBattleRoutes } from './lib/prepared-battle-http.mjs';
+import { CapabilityMenuProvider, conversationAudioExportAllowed } from './speech/providers/capability-menu-provider.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
@@ -58,6 +59,8 @@ const enrolledSpeech = new EnrolledSpeechProvider({ lab: voiceProfilesStore,
   enabled: process.env.VOICE_LAB_ENABLED === '1' && process.env.VOICE_LAB_FIGHT_CLUB_ENABLED === '1',
 });
 const fixedSpeech = new FixedOmniVoiceProvider({ manifest: process.env.VOICE_LAB_SYNTHETIC_VOICES, provider: voiceProfilesStore.provider });
+const capabilitySpeech = new CapabilityMenuProvider({url:process.env.AGENT_CONTROL_SPEECH_URL,token:process.env.AGENT_CONTROL_SPEECH_TOKEN,
+  enabled:process.env.FIGHT_CLUB_PREPARED_ENABLED==='1'});
 const voiceLab = voiceLabRoutes({
   lab: voiceProfilesStore,
   directory: process.env.VOICE_LAB_DATA_DIR || path.join(dataDir, 'voice-lab-private'),
@@ -139,7 +142,8 @@ async function body(request) {
 
 async function speechResponse(payload, pathname = '/tts/stream', signal) {
   let upstream;
-  if (enrolledSpeech.supports(payload?.voice)) upstream = await enrolledSpeech.response({ ...payload, signal });
+  if (capabilitySpeech.supports(payload?.voice)) upstream = await capabilitySpeech.response({ ...payload, signal });
+  else if (enrolledSpeech.supports(payload?.voice)) upstream = await enrolledSpeech.response({ ...payload, signal });
   else if (fixedSpeech.supports(payload?.voice)) upstream = await fixedSpeech.response({ ...payload, signal });
   else upstream = await fetch(new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`), {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
@@ -154,7 +158,7 @@ async function speechResponse(payload, pathname = '/tts/stream', signal) {
 }
 function turnSpeechPayload(c, participant, text) {
   const heat = conversationHeatDirection(c);
-  return { voice: participant.voice, text, speechRate: participant.speechRate || 1,
+  return { voice: participant.voice, text, speechRate: participant.speechRate || 1, voiceBinding: participant.voiceProfile?.speechBinding,
     profile: c.speechProfile || 'LIVE_FAST', delivery: c.delivery || 'PASSIONATE', format: c.format, style: c.style, role: participant.role,
     deliveryHints: [participant.personality.speakingRhythm, participant.personality.temperament, participant.personality.humourStyle, participant.personality.rhetoricalStyle, ...heat.deliveryHints].filter(Boolean) };
 }
@@ -171,6 +175,8 @@ async function bufferSpeech(payload, signal) {
   return { bytes: Buffer.concat(chunks), headers: Object.fromEntries(response.headers) };
 }
 async function proxySpeech(request, response, pathname) {
+  const synthesisController = new AbortController();
+  response.once('close',()=>{if(!response.writableEnded)synthesisController.abort();});
   let payload = request.method === 'POST' ? await body(request) : null;
   const conversation = payload?.conversationId ? conversations.get(String(payload.conversationId)) : null;
   const turn = conversation?.transcript.find(item => item.turn_id === payload?.turnId);
@@ -194,7 +200,7 @@ async function proxySpeech(request, response, pathname) {
     }
     upstream = new Response(audio.bytes, { headers: { ...audio.headers, 'x-tts-prefetched': 'true' } });
     preparedAudio.delete(turn.turn_id);
-  } else if (payload) upstream = await speechResponse(payload, pathname);
+  } else if (payload) upstream = await speechResponse(payload, pathname, synthesisController.signal);
   else upstream = await fetch(new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`), {
     method: request.method,
     headers: payload ? { 'content-type': 'application/json' } : undefined,
@@ -202,8 +208,9 @@ async function proxySpeech(request, response, pathname) {
   });
   if (pathname === '/tts/voices' && upstream.ok) {
     const catalog = await upstream.json(), enrolled = await enrolledSpeech.voicesForMenu();
-    catalog.voiceOptions = [...enrolled, ...(catalog.voiceOptions || catalog.voices.map(id => ({ id, label: id })))];
-    catalog.voices = [...enrolled.map(v => v.id), ...catalog.voices];
+    const capabilityVoices = capabilitySpeech.voicesForMenu();
+    catalog.voiceOptions = [...enrolled, ...capabilityVoices, ...(catalog.voiceOptions || catalog.voices.map(id => ({ id, label: id })))];
+    catalog.voices = [...enrolled.map(v => v.id), ...capabilityVoices.map(v=>v.id), ...catalog.voices];
     return send(response, 200, catalog);
   }
   const headers = {
@@ -243,6 +250,10 @@ async function proxySpeech(request, response, pathname) {
     turn.tts_generation_latency_ms = Number(headers['x-tts-generation-ms']) || 0;
     turn.synthesized_audio_duration_ms = Number(headers['x-tts-audio-duration-ms']) || null;
     turn.audio_prefetched = headers['x-tts-prefetched'] === 'true';
+    if(capabilitySpeech.supports(turn.voice)) {
+      turn.speech_evidence=JSON.parse(decodeURIComponent(upstream.headers.get('x-speech-evidence')));
+      turn.audio_export_allowed=false;
+    }
     await persist(conversation);
   }
 }
@@ -641,6 +652,7 @@ async function generateCurrent(conversation) {
 const markdown = (conversation) => `# ${conversation.format}: ${conversation.premise}\n\n_Conversation heat at export: ${conversation.conversationHeat || 'BALANCED'}_\n\n${conversation.transcript.map((turn) => `## ${turn.speaker} — ${turn.role}\n\n${turn.text}\n\n_Model: ${turn.model}; voice: ${turn.voice}; voice speed: ${turn.speech_rate || 1}x; heat: ${turn.conversation_heat || conversation.conversationHeat || 'BALANCED'}; TTS: ${turn.tts_provider}; LLM: ${turn.generation_latency_ms} ms; TTS generation: ${turn.tts_generation_latency_ms} ms; playback: ${turn.audio_duration_ms ?? 'pending'} ms_`).join('\n\n')}\n\n## Conversation heat changes\n\n${(conversation.heatHistory||[]).map((item) => `- ${item.at}: ${item.from} → ${item.to}`).join('\n') || '(none)'}\n\n## Audience interventions\n\n${(conversation.audienceInterventions||[]).map((item) => `- ${item.text}`).join('\n') || '(none)'}`;
 
 async function buildAudioExport(conversation) {
+  if(!conversationAudioExportAllowed(conversation)){conversation.audio={status:'unavailable',error:'CSM private playback: watermark/export qualification pending'};return;}
   try {
     const result = await assembleConversationMp3({ dataDir, conversation, gapMs: 350 });
     conversation.audio = { status: 'ready', file: 'conversation.mp3', turn_count: result.turnCount, inter_turn_gap_ms: result.gapMs };
@@ -672,6 +684,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/api/conversations') {
       const input = await body(request);
       const conversation = createConversation(input);
+      for(const participant of conversation.participants)if(capabilitySpeech.supports(participant.voice))participant.voiceProfile={id:participant.voice,speechBinding:await capabilitySpeech.bind(participant.voice)};
       conversation.speechProfile = String(input.speechProfile || 'LIVE_FAST');
       conversation.delivery = String(input.delivery || 'PASSIONATE');
       conversations.set(conversation.id, conversation);
@@ -689,11 +702,13 @@ const server = http.createServer(async (request, response) => {
       const conversation = conversations.get(turnAudioMatch[1]);
       const turn = conversation?.transcript.find((item) => item.turn_id === turnAudioMatch[2] && item.audio_file);
       if (!turn) return send(response, 404, { error: 'Turn audio not found' });
+      if(capabilitySpeech.supports(turn.voice))return send(response,403,{error:'CSM audio export is not yet qualified; live playback remains available'});
       return await sendAudio(response, turnAudioPath(dataDir, conversation.id, turn.turn_id), 'audio/wav', `turn-${turn.turn_index + 1}.wav`);
     }
     const conversationAudioMatch = url.pathname.match(/^\/api\/conversations\/([\w-]+)\/conversation\.mp3$/);
     if (request.method === 'GET' && conversationAudioMatch) {
       const conversation = conversations.get(conversationAudioMatch[1]);
+      if(conversation&&!conversationAudioExportAllowed(conversation))return send(response,403,{error:'CSM audio export is not yet qualified'});
       if (!conversation || conversation.audio?.status !== 'ready') return send(response, 404, { error: 'Conversation audio not ready' });
       return await sendAudio(response, conversationMp3Path(dataDir, conversation.id), 'audio/mpeg', 'conversation.mp3');
     }
