@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LLM Debate — choose a side</title>
+<link rel="stylesheet" href="speaker-stage.css">
+<style>
+  :root{font-family:Inter,system-ui;color:#f4ead8;background:#110f13}
+  [hidden]{display:none!important}
+  body{max-width:980px;margin:auto;padding:20px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .card{background:#211c25;border:1px solid #46384c;border-radius:14px;padding:16px;margin:14px 0}
+  .participant{border-top:5px solid var(--accent,#cf6)}
+  label{display:block;margin:9px 0;color:#dfd1e2}
+  input,select,textarea,button{box-sizing:border-box;width:100%;font:inherit;padding:9px;border-radius:8px;border:1px solid #67566e;background:#17131a;color:#fff}
+  button{width:auto;background:#b5384f;border:0;font-weight:700;cursor:pointer;margin:4px}
+  button:disabled{background:#514a53;color:#aaa1ac;cursor:not-allowed;opacity:.72}
+  .primary{font-size:1.08rem;padding:12px 22px}
+  .heat-panel{position:sticky;top:8px;z-index:5;border-color:#8f4f50;background:#261d23;box-shadow:0 8px 24px #080609cc}
+  .heat-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .heat-heading h2{margin:0;font-size:1.05rem}
+  .heat-value{font-weight:800;color:#ffb36b}
+  .heat-scale{display:flex;justify-content:space-between;font-size:.7rem;color:#bbaabd;text-transform:uppercase}
+  #conversationHeat{accent-color:#e14c4c;padding:0;border:0;background:linear-gradient(90deg,#7ab8ff,#d9b85b,#ef4444);height:8px}
+  .controls{display:none;position:static}
+  .transcript-window{height:min(58vh,650px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;background:#17131a;border:1px solid #46384c;border-radius:14px;padding:10px;margin:14px 0}
+  .turn{border-left:6px solid var(--accent);padding:14px;margin:12px 0;background:#211c25;border-radius:8px}
+  .speaking{box-shadow:0 0 0 3px #ffd166}
+  .meta{font-size:.78rem;color:#bbaabd}
+  .personality-summary{min-height:2.3em;margin:6px 0 8px}
+  .error{color:#ff8e9e}
+  .archive-player{margin-top:12px;padding-top:12px;border-top:1px solid #46384c}
+  .archive-player audio{width:100%;margin-top:8px}
+  .grenade{margin-top:14px;padding-top:12px;border-top:1px solid #46384c}
+  .grenade h3{margin:0 0 5px}
+  .intervention{border-left:6px solid #ff9f1c;padding:10px 12px;margin:8px 0;background:#30251d;border-radius:8px}
+  #third{display:none}
+  @media(max-width:600px){body{padding:10px}.controls button{width:46%}.transcript-window{height:52vh}.heat-scale span:nth-child(even){display:none}}
+</style>
+<link rel="stylesheet" href="public-debate.css">
+<link rel="stylesheet" href="/assets/site-shell.css?v=20260916-3">
+<body data-public-demo="true">
+  <header>
+    <p class="eyebrow">The debating table</p>
+    <h1>Choose a topic. Take a side.</h1>
+    <p class="intro">Two language models, two synthetic voices, and room for a disagreement. Choose their personalities, set the tone and listen as the arguments unfold.</p>
+  </header>
+  <details class="card"><summary>Your recent debates — listen again</summary>
+    <label>Debates from this browser (24 hours)<select id="savedConversations"><option value="">Loading…</option></select></label>
+    <button id="openSaved" type="button">Open saved conversation</button>
+    <a href="audio.html">Start a new conversation</a>
+  </details>
+  <p>AI-generated synthetic voices · turn-based audio · unscripted personalities</p>
+  <section id="heatPanel" class="card heat-panel">
+    <div class="heat-heading"><h2>CONVERSATION HEAT</h2><span id="heatValue" class="heat-value">BALANCED</span></div>
+    <label for="conversationHeat"><span id="heatDescription">Natural challenge, humour and occasional interruption.</span></label>
+    <input id="conversationHeat" type="range" min="1" max="5" step="1" value="3" aria-label="Conversation heat from docile to furious">
+    <div class="heat-scale" aria-hidden="true"><span>Docile</span><span>Calm</span><span>Balanced</span><span>Heated</span><span>Furious</span></div>
+    <p class="meta">Change this live. Hotter settings encourage sharper counterarguments. Use a curve ball to challenge both sides.</p>
+    <div id="speakerPresentation" hidden>
+      <div class="speaker-stage-heading"><span><span id="speakerStageStatus">Ready</span> <span id="speakerStageElapsed" aria-hidden="true"></span></span><label><input id="animateSpeakers" type="checkbox" checked>Animate speakers</label></div>
+      <div id="speakerStage" class="speaker-stage" aria-label="Participant activity"></div>
+    </div>
+  </section>
+  <form id="setup" class="card">
+    <div class="grid">
+      <label>FORMAT<select id="format"><option>INTERVIEW</option><option selected>DEBATE</option><option>PANEL</option><option>CROSS_EXAMINATION</option></select></label>
+      <label>STYLE<select id="style"><option>SATIRICAL</option><option>SERIOUS</option><option>FRIENDLY</option><option>INVESTIGATIVE</option><option>ABSURDIST</option></select></label>
+      <label>DELIVERY<select id="delivery"><option selected>PASSIONATE</option><option>BALANCED</option><option>RESTRAINED</option></select></label>
+      <label>OUTPUT<select id="outputMode"><option value="TEXT_AND_VOICE" selected>Text + voice</option><option value="VOICE">Voice (transcript retained)</option><option value="TEXT">Text only</option></select></label>
+      <label hidden>INTERRUPTION AUDIO<select id="interruptionAudio"><option value="NATURAL_DUCK" selected>Natural duck (brief fade)</option><option value="HARD_CUT">Hard cut</option></select></label>
+      <label id="refereeOption" hidden>DEBATE REFEREE<select id="refereeEnabled"><option value="false" selected>Off</option><option value="true">On — joins the discussion</option></select></label>
+    </div>
+
+    <div class="presets" aria-label="Topic ideas">
+      <button type="button" data-topic="AI will make people more creative.">AI &amp; creativity</button>
+      <button type="button" data-topic="Every village should leave more land wild.">A wilder village</button>
+      <button type="button" data-topic="The best games were made with 64 kilobytes of memory.">Old-school games</button>
+    </div>
+    <label>TOPIC / PREMISE<textarea id="premise" rows="3" maxlength="800">AI will make people more creative.</textarea></label>
+    <label>LENGTH (TURNS, 2–6)<input id="turnLimit" type="number" min="2" max="6" step="1" value="4"></label>
+    <div class="grid">
+      <section id="first" class="card participant" style="--accent:#63d2ff">
+        <h2></h2>
+        <label>MODEL<select class="model"></select></label>
+        <label>PERSONALITY<select class="personality"></select></label>
+        <p class="personality-summary meta"></p>
+        <label>PERSONALITY PROMPT (OPTIONAL)<textarea class="personality-prompt" rows="4" maxlength="500" placeholder="Add original character direction: worldview, objectives, blind spots, confidence, humour, verbal habits, contradictions…"></textarea></label>
+        <label>VOICE<select class="voice"></select></label>
+        <label>VOICE SPEED<select class="speech-rate"><option value="0.75">Slow · 0.75×</option><option value="0.9">Relaxed · 0.90×</option><option value="1" selected>Natural · 1.00×</option><option value="1.1">Brisk · 1.10×</option><option value="1.25">Fast · 1.25×</option></select></label>
+        <button type="button" class="preview">Preview</button>
+      </section>
+      <section id="second" class="card participant" style="--accent:#ff6b9a">
+        <h2></h2>
+        <label>MODEL<select class="model"></select></label>
+        <label>PERSONALITY<select class="personality"></select></label>
+        <p class="personality-summary meta"></p>
+        <label>PERSONALITY PROMPT (OPTIONAL)<textarea class="personality-prompt" rows="4" maxlength="500" placeholder="Add original character direction: worldview, objectives, blind spots, confidence, humour, verbal habits, contradictions…"></textarea></label>
+        <label>VOICE<select class="voice"></select></label>
+        <label>VOICE SPEED<select class="speech-rate"><option value="0.75">Slow · 0.75×</option><option value="0.9">Relaxed · 0.90×</option><option value="1" selected>Natural · 1.00×</option><option value="1.1">Brisk · 1.10×</option><option value="1.25">Fast · 1.25×</option></select></label>
+        <button type="button" class="preview">Preview</button>
+      </section>
+      <section id="third" class="card participant" style="--accent:#ffd166">
+        <h2></h2>
+        <label>MODEL<select class="model"></select></label>
+        <label>PERSONALITY<select class="personality"></select></label>
+        <p class="personality-summary meta"></p>
+        <label>PERSONALITY PROMPT (OPTIONAL)<textarea class="personality-prompt" rows="4" maxlength="500" placeholder="Add original character direction: worldview, objectives, blind spots, confidence, humour, verbal habits, contradictions…"></textarea></label>
+        <label>VOICE<select class="voice"></select></label>
+        <label>VOICE SPEED<select class="speech-rate"><option value="0.75">Slow · 0.75×</option><option value="0.9">Relaxed · 0.90×</option><option value="1" selected>Natural · 1.00×</option><option value="1.1">Brisk · 1.10×</option><option value="1.25">Fast · 1.25×</option></select></label>
+        <button type="button" class="preview">Preview</button>
+      </section>
+    </div>
+    <button class="primary">START INTERVIEW</button>
+
+  </form>
+  <section id="controls" class="card controls">
+    <b id="status"></b>
+    <button id="pause">Pause</button>
+    <button id="resume">Resume</button>
+    <button id="skip">Skip speech</button>
+    <button id="retry" hidden>Retry response</button>
+    <button id="stop">Stop</button>
+    <a id="jsonExport">JSON</a> · <a id="mdExport">Markdown</a> · <a id="audioExport" hidden download="conversation.mp3">Conversation MP3</a>
+    <div class="grenade">
+      <h3>Throw a Grenade</h3>
+      <p class="meta">Interrupt with a curve ball. Playback stops and every participant must address it on their next turn.</p>
+      <textarea id="grenadeText" rows="2" maxlength="500" placeholder="Type a curve ball comment or question…"></textarea>
+      <button type="button" id="grenadeMic">🎙 Speak</button>
+      <button type="button" id="grenadeThrow">Throw Grenade</button>
+      <span id="grenadeStatus" class="meta" role="status"></span>
+      <div id="grenadeHistory"></div>
+    </div>
+    <div id="bargeInHistory" class="grenade">
+      <h3>Autonomous listener</h3>
+      <p id="bargeInStatus" class="meta">Waiting for an audible checkpoint.</p>
+    </div>
+    <div id="archivePlayback" class="archive-player" hidden>
+      <h3>Listen again — saved audio</h3>
+      <p id="archiveNotice" class="meta"></p>
+      <button id="replayAll" type="button">Play whole conversation</button>
+      <button id="replayPause" type="button" disabled>Pause replay</button>
+      <button id="replayResume" type="button" disabled>Resume replay</button>
+      <button id="replaySkip" type="button" disabled>Skip saved turn</button>
+      <button id="replayStop" type="button" disabled>Stop replay</button>
+      <a id="savedConversationLink">Bookmark this conversation</a>
+      <p id="replayStatus" role="status" aria-live="polite">Choose Play whole conversation or Replay turn.</p>
+      <p id="replayCaption"></p>
+      <label>WHOLE CONVERSATION PLAYBACK SPEED
+        <select id="archivePlaybackRate"><option value="0.75">0.75×</option><option value="1" selected>1.00×</option><option value="1.25">1.25×</option><option value="1.5">1.50×</option><option value="2">2.00×</option></select>
+      </label>
+      <audio id="archivePlayer" controls preload="metadata"></audio>
+    </div>
+  </section>
+  <p id="error" class="error" role="alert"></p>
+  <main id="transcript" class="transcript-window" aria-live="polite" hidden></main>
+  <p class="privacy-note">No account needed. Your topic and transcript are processed on the server. This browser can revisit its debates for 24 hours, after which the saved text and audio are deleted. Four new debates per hour. AI arguments can be wrong; treat this as an experiment.</p>
+  <audio id="player" preload="auto"></audio>
+  <script src="polyfills.js"></script>
+  <script type="module" src="audio.js"></script>
+<script type="module" src="public-debate.js"></script>
+</body>
+</html>

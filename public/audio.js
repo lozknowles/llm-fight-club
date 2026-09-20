@@ -9,7 +9,8 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const appBase = new URL('.', window.location.href).pathname;
 const endpoint = (pathname) => `${appBase}${pathname.replace(/^\//, '')}`;
 const ttsBase = endpoint('/tts');
-const speechProfile = new URLSearchParams(window.location.search).get('profile') || 'LIVE_FAST';
+const isPublicDemo = document.body.dataset.publicDemo === 'true';
+const speechProfile = isPublicDemo ? 'LOCAL' : new URLSearchParams(window.location.search).get('profile') || 'LIVE_FAST';
 const disclosure = document.querySelector('body > p');
 if (disclosure) disclosure.textContent = 'AI-generated synthetic voices · turn-based audio · unscripted personalities';
 
@@ -97,7 +98,7 @@ function renderHeat(heat = selectedHeat()) {
   const normalized = heatLevels.includes(heat) ? heat : 'BALANCED';
   $('#conversationHeat').value = String(heatLevels.indexOf(normalized) + 1);
   $('#heatValue').textContent = normalized;
-  $('#heatDescription').textContent = config?.conversationHeat?.[normalized]?.description || heatDescriptions[normalized];
+  $('#heatDescription').textContent = isPublicDemo ? 'Set the tone, from a gentle discussion to a fiery exchange. Speakers take turns.' : config?.conversationHeat?.[normalized]?.description || heatDescriptions[normalized];
   const ended = conversation && ['STOPPED', 'COMPLETED', 'ERROR'].includes(conversation.state);
   $('#conversationHeat').disabled = Boolean(ended);
   $('#heatPanel').dataset.heat = normalized;
@@ -435,7 +436,7 @@ function fill() {
   const csmDefaults = ['csm-fighter-a', 'csm-fighter-b', 'csm-mallow'];
   const defaults = speechProfile.toUpperCase() === 'CSM' && csmDefaults.every(id=>voices.includes(id)) ? csmDefaults : speechProfile.toUpperCase() === 'OMNIVOICE' && omniDefaults.every((id) => voices.includes(id))
     ? omniDefaults : liveDefaults.every((id) => voices.includes(id)) ? liveDefaults : premiumDefaults;
-  $$('.voice').forEach((select, index) => { select.value = defaults[index] || voices[index]; });
+  $$('.voice').forEach((select, index) => { select.value = voices.includes(defaults[index]) ? defaults[index] : voices[index]; });
   $$('.personality').forEach((select) => {
     const updateSummary = () => {
       const profile = config.personalities.find((item) => item.id === select.value);

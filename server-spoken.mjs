@@ -21,6 +21,7 @@ import { validateBoutScore } from './lib/voice-lab-judge.mjs';
 import { preparedBattleRoutes, sendBattleAudio } from './lib/prepared-battle-http.mjs';
 import { createHash } from 'node:crypto';
 import { CapabilityMenuProvider, conversationAudioExportAllowed } from './speech/providers/capability-menu-provider.mjs';
+import { PublicAccess, PUBLIC_VOICES, publicView } from './lib/public-access.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
@@ -31,6 +32,13 @@ try { routes = JSON.parse(process.env.FIGHT_CLUB_MODEL_ROUTES || '{}'); } catch 
 const models = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_URL || 'http://127.0.0.1:18780/v1', routes,
   apiKeys: JSON.parse(process.env.FIGHT_CLUB_MODEL_API_KEYS || '{}') });
 const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:18772';
+const publicAccess = new PublicAccess({ enabled: process.env.FIGHT_CLUB_PUBLIC === '1',
+  origins: (process.env.FIGHT_CLUB_PUBLIC_ORIGINS || '').split(',').filter(Boolean),
+  cookiePath: process.env.FIGHT_CLUB_PUBLIC_PATH || '/llm-debate/',
+  secure: process.env.FIGHT_CLUB_PUBLIC_INSECURE_LOCAL !== '1', models: Object.keys(routes) });
+if (publicAccess.enabled && (!process.env.FIGHT_CLUB_DATA_DIR || process.env.VOICE_LAB_ENABLED === '1' || process.env.FIGHT_CLUB_PREPARED_ENABLED === '1')) {
+  throw Error('Public mode requires separate storage with Voice Lab and prepared battles disabled');
+}
 const preparedRoutes = JSON.parse(process.env.FIGHT_CLUB_PREPARED_MODEL_ROUTES || JSON.stringify(routes));
 const preparedModels = new ModelRouter({ defaultBaseUrl: process.env.FIGHT_CLUB_MODEL_URL || 'http://127.0.0.1:18780/v1', routes: preparedRoutes,
   apiKeys: JSON.parse(process.env.FIGHT_CLUB_PREPARED_MODEL_API_KEYS || process.env.FIGHT_CLUB_MODEL_API_KEYS || '{}') });
@@ -130,7 +138,7 @@ function publicConversation(conversation) {
     normalTurns: Math.max(0, value.transcript.length - interruptedTurns),
     falsePositives: 'requires human review',
   };
-  return value;
+  return publicAccess.enabled ? publicView(value) : value;
 }
 async function body(request) {
   let raw = '';
@@ -143,7 +151,12 @@ async function body(request) {
 
 async function speechResponse(payload, pathname = '/tts/stream', signal) {
   let upstream;
-  if (capabilitySpeech.supports(payload?.voice)) upstream = await capabilitySpeech.response({ ...payload, signal });
+  if (publicAccess.enabled) upstream = await fetch(new URL('synthesize', `${speechBaseUrl}/`), {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text: payload.text, voice: payload.voice, speechRate: payload.speechRate }),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000),
+  });
+  else if (capabilitySpeech.supports(payload?.voice)) upstream = await capabilitySpeech.response({ ...payload, signal });
   else if (enrolledSpeech.supports(payload?.voice)) upstream = await enrolledSpeech.response({ ...payload, signal });
   else if (fixedSpeech.supports(payload?.voice)) upstream = await fixedSpeech.response({ ...payload, signal });
   else upstream = await fetch(new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`), {
@@ -179,6 +192,7 @@ async function proxySpeech(request, response, pathname) {
   const synthesisController = new AbortController();
   response.once('close',()=>{if(!response.writableEnded)synthesisController.abort();});
   let payload = request.method === 'POST' ? await body(request) : null;
+  if (publicAccess.enabled) request.releasePublicSpeech = publicAccess.speech(payload, request.publicVisitor, conversations);
   const conversation = payload?.conversationId ? conversations.get(String(payload.conversationId)) : null;
   const turn = conversation?.transcript.find(item => item.turn_id === payload?.turnId);
   if (payload?.conversationId) {
@@ -674,8 +688,13 @@ async function sendAudio(response, file, type, downloadName) {
 }
 
 const server = http.createServer(async (request, response) => {
+  let releaseGeneration;
   try {
     const url = new URL(request.url, 'http://localhost');
+    request.publicVisitor = publicAccess.begin(request, response, url, conversations);
+    if (publicAccess.enabled && url.pathname === '/tts/voices' && request.method === 'GET') return send(response, 200, {
+      voices: PUBLIC_VOICES.map(v => v.id), voiceOptions: PUBLIC_VOICES,
+    });
     if (await preparedBattle(request, response, url)) return;
     if (await voiceLab(request, response, url)) return;
     if (request.method === 'GET' && url.pathname === '/tts/voices') return await proxySpeech(request, response, url.pathname);
@@ -683,8 +702,10 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/config') return send(response, 200, { formats: FORMATS, personalities: PERSONALITIES, interruptionLevels: INTERRUPTION_LEVELS, conversationHeatLevels: CONVERSATION_HEAT_LEVELS, conversationHeat: CONVERSATION_HEAT, models: Object.keys(routes).length ? Object.keys(routes) : ['qwen3-8b'] });
     if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok', version, engine: 'conversation-v2', speech: 'provider-neutral-router' });
     if (request.method === 'POST' && url.pathname === '/api/conversations') {
-      const input = await body(request);
+      let input = await body(request);
+      if (publicAccess.enabled) input = publicAccess.creation(input, request.publicVisitor);
       const conversation = createConversation(input);
+      if (publicAccess.enabled) { conversation.publicOwner = request.publicVisitor.owner; conversation.interruptionLevel = 'OFF'; }
       for(const participant of conversation.participants)if(capabilitySpeech.supports(participant.voice))participant.voiceProfile={id:participant.voice,speechBinding:await capabilitySpeech.bind(participant.voice)};
       conversation.speechProfile = String(input.speechProfile || 'LIVE_FAST');
       conversation.delivery = String(input.delivery || 'PASSIONATE');
@@ -700,7 +721,7 @@ const server = http.createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/api/conversations') {
       if (request.headers['sec-fetch-site'] === 'cross-site') return send(response,403,{error:'cross_site_denied'});
-      return send(response,200,[...conversations.values()].filter(c=>c.transcript.length)
+      return send(response,200,[...conversations.values()].filter(c=>c.transcript.length && (!publicAccess.enabled || publicAccess.owns(c, request.publicVisitor)))
         .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,100)
         .map(c=>({id:c.id,createdAt:c.createdAt,premise:c.premise,state:c.state,turnCount:c.transcript.length,savedAudioCount:c.transcript.filter(t=>t.audio_file).length})));
     }
@@ -737,6 +758,7 @@ const server = http.createServer(async (request, response) => {
       const conversation = conversations.get(bargeMatch[1]);
       if (!conversation) return send(response, 404, { error: 'Conversation not found' });
       const payload = await body(request);
+      if (publicAccess.enabled) return send(response,200,{decision:{action:'LISTEN',reason:'Taking turns'},conversation:publicConversation(conversation)});
       if (bargeMatch[2] === 'evaluate') {
         const decision = await evaluateBargeIn(conversation, payload);
         return send(response, 200, { decision, conversation: publicConversation(conversation) });
@@ -782,14 +804,22 @@ const server = http.createServer(async (request, response) => {
       if (request.method === 'GET') return send(response, 200, publicConversation(conversation));
       const action = match[2];
       const payload = await body(request);
-      if (action === 'next') return send(response, 200, { turn: await generate(conversation), conversation: publicConversation(conversation) });
+      if (action === 'next') {
+        if (publicAccess.enabled) releaseGeneration = publicAccess.generation(request.publicVisitor);
+        const turn = await generate(conversation);
+        return send(response, 200, { turn: publicAccess.enabled ? publicView(turn) : turn, conversation: publicConversation(conversation) });
+      }
       if (action === 'heat') {
         setConversationHeat(conversation, payload.heat);
+        if (publicAccess.enabled) conversation.interruptionLevel = 'OFF';
         invalidatePreparation(conversation.id);
         await persist(conversation);
         return send(response, 200, publicConversation(conversation));
       }
       if (action === 'intervention') {
+        if (publicAccess.enabled && (conversation.audienceInterventions.length >= 2 || conversation.transcript.length > 6 - conversation.participants.length)) {
+          return send(response,400,{error:'Start a new debate to explore another question.'});
+        }
         invalidatePreparation(conversation.id);
         const previousTurn = conversation.transcript.at(-1);
         const previousAudioFile = conversation.awaitingPlayback && previousTurn?.audio_file;
@@ -799,6 +829,7 @@ const server = http.createServer(async (request, response) => {
         return send(response, 200, publicConversation(conversation));
       }
       if (action === 'prefetch') {
+        if (publicAccess.enabled) return send(response,202,{status:'not-needed'});
         if (conversation.state !== 'ACTIVE') throw Error('Prefetch requires an active conversation');
         if (payload.turnId && payload.turnId !== conversation.transcript.at(-1)?.turn_id) throw Error('Audible turn changed');
         if (!conversation.awaitingPlayback) throw new Error('Prefetch requires a turn currently in playback');
@@ -843,7 +874,7 @@ const server = http.createServer(async (request, response) => {
       }
     }
     if (request.method === 'GET') {
-      const file = url.pathname === '/' ? 'show.html' : path.basename(url.pathname);
+      const file = publicAccess.enabled && ['/', '/audio.html'].includes(url.pathname) ? 'audio-public.html' : url.pathname === '/' ? 'show.html' : path.basename(url.pathname);
       const bytes = await fs.readFile(path.join(publicDir, file));
       const type = file.endsWith('.js') ? 'text/javascript; charset=utf-8' : file.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/html; charset=utf-8';
       return send(response, 200, bytes, type);
@@ -851,11 +882,29 @@ const server = http.createServer(async (request, response) => {
     send(response, 404, { error: 'Not found' });
   } catch (error) {
     console.error(error);
-    send(response, 400, { error: error.message });
+    if (response.headersSent) response.end();
+    else send(response, error.publicStatus || 400, { error: publicAccess.enabled && !error.publicStatus ? 'This request could not be completed. Check your choices or try again shortly.' : error.message });
+  } finally {
+    releaseGeneration?.(); request.releasePublicSpeech?.();
   }
 });
 
 await restoreConversations();
+async function expirePublicConversations() {
+  if (!publicAccess.enabled) return;
+  const base = path.resolve(dataDir);
+  for (const [id, c] of conversations) {
+    if (!/^[a-zA-Z0-9-]+$/.test(id) || !/^[a-f0-9]{64}$/.test(c.publicOwner || '') || !publicAccess.expired(c) || generations.has(id)) continue;
+    invalidatePreparation(id);
+    for (const target of [path.resolve(base, 'audio', id), path.resolve(base, 'conversations', `${id}.json`)]) {
+      if (!target.startsWith(base + path.sep)) throw Error('Unsafe retention path');
+      await fs.rm(target, { recursive: true, force: true });
+    }
+    conversations.delete(id);
+  }
+}
+await expirePublicConversations();
+if (publicAccess.enabled) setInterval(() => expirePublicConversations().catch(console.error), 60000).unref();
 server.listen(Number(process.env.PORT || 18770), process.env.HOST || '127.0.0.1', () => {
   console.log(`Spoken conversation engine listening on http://${process.env.HOST || '127.0.0.1'}:${server.address().port}`);
 });
