@@ -683,7 +683,10 @@ $('#transcript').onclick = event => {
 };
 $('#openSaved').onclick = () => {
   const id=$('#savedConversations').value;
-  if(id) window.open(`${endpoint('/audio.html')}?conversation=${encodeURIComponent(id)}`,'_blank','noopener');
+  if (!id) return;
+  const url = `${endpoint('/audio.html')}?conversation=${encodeURIComponent(id)}`;
+  if (isPublicDemo) location.assign(url);
+  else window.open(url,'_blank','noopener');
 };
 $('#pause').onclick = async () => {
   player.pause();
