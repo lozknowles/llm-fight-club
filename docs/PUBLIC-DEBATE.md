@@ -1,6 +1,6 @@
 # Public LLM Debate
 
-The portfolio hosts a public debate at `https://www.lozknowles.com/llm-debate.html`.
+The portfolio hosts LLM Fight Club at `https://www.lozknowles.com/llm-debate.html`.
 It uses a separate application instance and storage directory. The private Studio,
 Voice Lab, prepared battles, enrolled voices and saved private conversations remain
 on their existing authenticated deployment.
@@ -14,13 +14,19 @@ Run `node server-spoken.mjs` from the pinned release with:
 - `FIGHT_CLUB_PUBLIC_PATH=/llm-debate/`
 - `FIGHT_CLUB_DATA_DIR`: a dedicated, empty public-instance storage directory
 - `FIGHT_CLUB_MODEL_ROUTES`: explicit local model names mapped to existing endpoints
-- `FIGHT_CLUB_SPEECH_URL`: the existing loopback Flite service, without API credentials
+- `FIGHT_CLUB_CSM_MENU_ENABLED=1`: expose the three original CSM synthetic voices
+- `AGENT_CONTROL_SPEECH_URL` and `AGENT_CONTROL_SPEECH_TOKEN`: server-only access to
+  the existing CSM capability; keep the runtime environment outside source control
 - `VOICE_LAB_ENABLED=0` and `FIGHT_CLUB_PREPARED_ENABLED=0`
 - `HOST` and `PORT`: the private reverse-proxy network address and a dedicated port
 
-No new model or speech worker is required. Public mode sends only the allowlisted
-Flite voices to `/synthesize` and rejects other voice identities. It does not load
-cloud credentials, voice enrolment credentials or the private speech capability.
+No new model or speech worker is required. Public conversations default to CSM
+Fighter A and Fighter B, with Mallow for a referee or third participant. Voice
+identities and settings are pinned per conversation. Public mode exposes neither
+the capability token nor Voice Lab or the prepared-battle APIs. It does not load
+cloud or voice-enrolment credentials. The existing CSM audio-export gate is retained;
+saved replay remains available. The key-free Flite configuration is still supported
+when the separate CSM menu flag is off, with an explicit local voice catalogue.
 
 The reverse proxy must replace untrusted `X-Forwarded-For` before appending the
 actual client address. Expose only this new instance beneath `/llm-debate/`.
@@ -43,9 +49,10 @@ turns. Speakers take turns; public prefetch and autonomous interruption generati
 are disabled. Up to two audience curve balls can be admitted within the six-turn
 budget. The private instance retains its original behavior.
 
-Only the owning browser can revisit its saved debates. Public transcripts and audio
-expire after 24 hours and are removed by the public instance's minute-level cleanup.
-The UI discloses server processing, retention and usage limits.
+Only the owning browser can revisit its saved debates. The public instance's copies
+expire after 24 hours and are removed by its minute-level cleanup. The existing CSM
+capability also retains its independent speech cache; the UI discloses server-side
+processing and cached speech without claiming that this cache is purged after 24 hours.
 
 ## Verification
 

@@ -20,7 +20,7 @@ import { spokenText } from './lib/spoken-text.mjs';
 import { validateBoutScore } from './lib/voice-lab-judge.mjs';
 import { preparedBattleRoutes, sendBattleAudio } from './lib/prepared-battle-http.mjs';
 import { createHash } from 'node:crypto';
-import { CapabilityMenuProvider, conversationAudioExportAllowed } from './speech/providers/capability-menu-provider.mjs';
+import { CapabilityMenuProvider, CAPABILITY_VOICES, conversationAudioExportAllowed } from './speech/providers/capability-menu-provider.mjs';
 import { PublicAccess, PUBLIC_VOICES, publicView } from './lib/public-access.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -35,7 +35,8 @@ const speechBaseUrl = process.env.FIGHT_CLUB_SPEECH_URL || 'http://127.0.0.1:187
 const publicAccess = new PublicAccess({ enabled: process.env.FIGHT_CLUB_PUBLIC === '1',
   origins: (process.env.FIGHT_CLUB_PUBLIC_ORIGINS || '').split(',').filter(Boolean),
   cookiePath: process.env.FIGHT_CLUB_PUBLIC_PATH || '/llm-debate/',
-  secure: process.env.FIGHT_CLUB_PUBLIC_INSECURE_LOCAL !== '1', models: Object.keys(routes) });
+  secure: process.env.FIGHT_CLUB_PUBLIC_INSECURE_LOCAL !== '1', models: Object.keys(routes),
+  voices: process.env.FIGHT_CLUB_CSM_MENU_ENABLED === '1' ? CAPABILITY_VOICES.map(({id,label})=>({id,label})) : PUBLIC_VOICES });
 if (publicAccess.enabled && (!process.env.FIGHT_CLUB_DATA_DIR || process.env.VOICE_LAB_ENABLED === '1' || process.env.FIGHT_CLUB_PREPARED_ENABLED === '1')) {
   throw Error('Public mode requires separate storage with Voice Lab and prepared battles disabled');
 }
@@ -69,7 +70,8 @@ const enrolledSpeech = new EnrolledSpeechProvider({ lab: voiceProfilesStore,
 });
 const fixedSpeech = new FixedOmniVoiceProvider({ manifest: process.env.VOICE_LAB_SYNTHETIC_VOICES, provider: voiceProfilesStore.provider });
 const capabilitySpeech = new CapabilityMenuProvider({url:process.env.AGENT_CONTROL_SPEECH_URL,token:process.env.AGENT_CONTROL_SPEECH_TOKEN,
-  enabled:process.env.FIGHT_CLUB_PREPARED_ENABLED==='1'});
+  enabled:process.env.FIGHT_CLUB_PREPARED_ENABLED==='1' || process.env.FIGHT_CLUB_CSM_MENU_ENABLED==='1'});
+if (publicAccess.enabled && process.env.FIGHT_CLUB_CSM_MENU_ENABLED === '1' && !capabilitySpeech.enabled) throw Error('The public CSM menu requires its configured speech capability');
 const voiceLab = voiceLabRoutes({
   lab: voiceProfilesStore,
   directory: process.env.VOICE_LAB_DATA_DIR || path.join(dataDir, 'voice-lab-private'),
@@ -151,12 +153,12 @@ async function body(request) {
 
 async function speechResponse(payload, pathname = '/tts/stream', signal) {
   let upstream;
-  if (publicAccess.enabled) upstream = await fetch(new URL('synthesize', `${speechBaseUrl}/`), {
+  if (capabilitySpeech.supports(payload?.voice)) upstream = await capabilitySpeech.response({ ...payload, signal });
+  else if (publicAccess.enabled) upstream = await fetch(new URL('synthesize', `${speechBaseUrl}/`), {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: payload.text, voice: payload.voice, speechRate: payload.speechRate }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000),
   });
-  else if (capabilitySpeech.supports(payload?.voice)) upstream = await capabilitySpeech.response({ ...payload, signal });
   else if (enrolledSpeech.supports(payload?.voice)) upstream = await enrolledSpeech.response({ ...payload, signal });
   else if (fixedSpeech.supports(payload?.voice)) upstream = await fixedSpeech.response({ ...payload, signal });
   else upstream = await fetch(new URL(pathname.replace(/^\/tts/, ''), `${speechBaseUrl}/`), {
@@ -693,7 +695,7 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
     request.publicVisitor = publicAccess.begin(request, response, url, conversations);
     if (publicAccess.enabled && url.pathname === '/tts/voices' && request.method === 'GET') return send(response, 200, {
-      voices: PUBLIC_VOICES.map(v => v.id), voiceOptions: PUBLIC_VOICES,
+      voices: publicAccess.voices.map(v => v.id), voiceOptions: publicAccess.voices,
     });
     if (await preparedBattle(request, response, url)) return;
     if (await voiceLab(request, response, url)) return;

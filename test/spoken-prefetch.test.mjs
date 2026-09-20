@@ -13,7 +13,7 @@ async function waitFor(predicate) {
   for (let i = 0; i < 200; i++) { if (predicate()) return; await new Promise(r => setTimeout(r, 10)); }
   throw Error('Fixture timed out');
 }
-async function fixture(t, capability = false) {
+async function fixture(t, capability = false, publicMode = false) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'spoken-prefetch-test-'));
   const state = { calls: [], gate: null, fallback: false };
   const wav = Buffer.from(pcmS16leToWav(Buffer.alloc(24000 * 2 * 4)));
@@ -46,21 +46,42 @@ async function fixture(t, capability = false) {
   const app = spawn(process.execPath, ['server-spoken.mjs'], { cwd: new URL('..', import.meta.url), env: {
     ...process.env, HOST: '127.0.0.1', PORT: '0', FIGHT_CLUB_DATA_DIR: dir,
     FIGHT_CLUB_SPEECH_URL: upstream, FIGHT_CLUB_MODEL_URL: upstream,
-    FIGHT_CLUB_PREPARED_ENABLED:capability?'1':'0',AGENT_CONTROL_SPEECH_URL:upstream,AGENT_CONTROL_SPEECH_TOKEN:'fixture-only-'.repeat(4),
-    FIGHT_CLUB_MODEL_ROUTES: '{}', VOICE_LAB_ENABLED: '0', VOICE_LAB_SYNTHETIC_VOICES: '', VOICE_LAB_WORKER_URL: '',
+    FIGHT_CLUB_PREPARED_ENABLED:capability&&!publicMode?'1':'0',AGENT_CONTROL_SPEECH_URL:upstream,AGENT_CONTROL_SPEECH_TOKEN:'fixture-only-'.repeat(4),
+    FIGHT_CLUB_PUBLIC:publicMode?'1':'0',FIGHT_CLUB_CSM_MENU_ENABLED:capability&&publicMode?'1':'0',
+    FIGHT_CLUB_PUBLIC_ORIGINS:'https://example.test',FIGHT_CLUB_PUBLIC_INSECURE_LOCAL:'1',FIGHT_CLUB_PUBLIC_PATH:'/',
+    FIGHT_CLUB_MODEL_ROUTES: publicMode?JSON.stringify({fixture:upstream}):'{}', VOICE_LAB_ENABLED: '0', VOICE_LAB_SYNTHETIC_VOICES: '', VOICE_LAB_WORKER_URL: '',
   }, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = ''; app.stdout.on('data', c => { output += c; }); app.stderr.resume();
   t.after(async () => { app.kill(); await new Promise(r => app.exitCode !== null ? r() : app.once('exit', r)); fake.closeAllConnections(); await new Promise(r => fake.close(r)); await fs.rm(dir, { recursive: true, force: true }); });
   await waitFor(() => /listening on http:\/\/127.0.0.1:\d+/.test(output));
   const base = output.match(/http:\/\/127.0.0.1:\d+/)[0];
-  const post = (route, input = {}) => fetch(base + route, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+  const cookie=publicMode?(await fetch(base+'/api/config')).headers.get('set-cookie').split(';')[0]:'';
+  const get = route => fetch(base+route,{headers:{cookie}});
+  const post = (route, input = {}) => fetch(base + route, { method: 'POST', headers: { 'content-type': 'application/json',cookie,origin:'https://example.test' }, body: JSON.stringify(input) });
   const c = await (await post('/api/conversations', { format: 'INTERVIEW', premise: 'Should we change our conclusion?', turnLimit: 4, turnLength: 30, speechMode: 'server', conversationHeat: 'CALM',
     participants: [{ name: 'Alfie Rook', role: 'interviewer', model: 'fixture', voice: capability?'csm-fighter-a':'v0', personality: PERSONALITIES[0] }, { name: 'Cedric Pump', role: 'guest', model: 'fixture', voice: capability?'csm-fighter-b':'v1', personality: PERSONALITIES[1] }] })).json();
   const route = `/api/conversations/${c.id}`;
   const next = async () => (await post(route + '/next')).json();
   const speech = turn => post('/tts/stream', { conversationId: c.id, turnId: turn.turn_id, text: turn.text, voice: turn.voice });
-  return { state, post, c, route, next, speech, base, dir };
+  return { state, post, get, c, route, next, speech, base, dir };
 }
+
+test('public CSM chats use pinned synthetic voices while private tools, bindings and exports stay protected',async t=>{
+  const f=await fixture(t,true,true);
+  assert.equal(f.c.speechProfile,'CSM'); assert.equal(f.c.publicOwner,undefined);
+  assert(f.c.participants.every(p=>p.voice.startsWith('csm-') && !p.voiceProfile));
+  assert.deepEqual((await(await f.get('/tts/voices')).json()).voices,['csm-fighter-a','csm-fighter-b','csm-mallow']);
+  const turn=(await f.next()).turn, audio=await f.speech(turn);
+  assert.equal(audio.status,200);const original=Buffer.from(await audio.arrayBuffer());
+  await new Promise(r=>setTimeout(r,30));
+  const c=await(await f.get(f.route)).json();
+  assert.equal(c.transcript[0].audio_export_allowed,false); assert.equal(c.transcript[0].speech_evidence,undefined);
+  assert.deepEqual(Buffer.from(await(await f.get(`${f.route}/playback/${turn.turn_id}.wav`)).arrayBuffer()),original);
+  assert.equal((await f.get(`${f.route}/audio/${turn.turn_id}.wav`)).status,403);
+  assert.equal((await fetch(f.base+f.route)).status,404);
+  assert.equal((await f.get('/prepared-battle.html')).status,404);
+  assert.equal((await f.get('/voice-lab.html')).status,404);
+});
 
 test('main HTTP voice catalogue and conversation use generic CSM capability with persisted evidence and export gate',async t=>{
  const f=await fixture(t,true);

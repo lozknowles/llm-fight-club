@@ -10,7 +10,7 @@ const appBase = new URL('.', window.location.href).pathname;
 const endpoint = (pathname) => `${appBase}${pathname.replace(/^\//, '')}`;
 const ttsBase = endpoint('/tts');
 const isPublicDemo = document.body.dataset.publicDemo === 'true';
-const speechProfile = isPublicDemo ? 'LOCAL' : new URLSearchParams(window.location.search).get('profile') || 'LIVE_FAST';
+const speechProfile = isPublicDemo ? 'CSM' : new URLSearchParams(window.location.search).get('profile') || 'CSM';
 const disclosure = document.querySelector('body > p');
 if (disclosure) disclosure.textContent = 'AI-generated synthetic voices · turn-based audio · unscripted personalities';
 
@@ -512,7 +512,7 @@ function render() {
   $('#audioExport').hidden = !audioReady;
   $('#archivePlayback').hidden = false;
   $('#replayAll').disabled = !replayAllowed || !replay.turns.length;
-  $('#archiveNotice').textContent = `${replay.turns.length}/${conversation.transcript.length} turns have saved audio. Replay uses those files, without generating speech again. ${!replayAllowed?'Pause or finish the conversation before replaying. ':''}${conversation.transcript.some(t=>t.audio_export_allowed===false)?'Private CSM replay is available; CSM downloads remain disabled pending watermark/export qualification.':audioReady?'Use Conversation MP3 to save the whole conversation, or Download WAV beside a turn.':'MP3 is available once permitted audio export has completed.'}`;
+  $('#archiveNotice').textContent = `${replay.turns.length}/${conversation.transcript.length} turns have saved audio. Replay uses those files, without generating speech again. ${!replayAllowed?'Pause or finish the conversation before replaying. ':''}${conversation.transcript.some(t=>t.audio_export_allowed===false)?(isPublicDemo?'Saved CSM audio can be replayed here. Audio downloads are unavailable.':'Private CSM replay is available; CSM downloads remain disabled pending watermark/export qualification.'):audioReady?'Use Conversation MP3 to save the whole conversation, or Download WAV beside a turn.':'MP3 is available once permitted audio export has completed.'}`;
   $('#savedConversationLink').href = `${endpoint('/audio.html')}?conversation=${encodeURIComponent(conversation.id)}`;
 }
 

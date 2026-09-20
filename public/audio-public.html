@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LLM Debate — choose a side</title>
+<title>LLM Fight Club — choose a side</title>
 <link rel="stylesheet" href="speaker-stage.css">
 <style>
   :root{font-family:Inter,system-ui;color:#f4ead8;background:#110f13}
@@ -41,9 +41,9 @@
 <link rel="stylesheet" href="/assets/site-shell.css?v=20260916-3">
 <body data-public-demo="true">
   <header>
-    <p class="eyebrow">The debating table</p>
+    <p class="eyebrow">LLM Fight Club · The debating table</p>
     <h1>Choose a topic. Take a side.</h1>
-    <p class="intro">Two language models, two synthetic voices, and room for a disagreement. Choose their personalities, set the tone and listen as the arguments unfold.</p>
+    <p class="intro">Two language models, distinct CSM voices, and room for a disagreement. Choose their personalities, set the tone and listen as the arguments unfold. CSM prepares each spoken reply before playback, so allow a little time between turns.</p>
   </header>
   <details class="card"><summary>Your recent debates — listen again</summary>
     <label>Debates from this browser (24 hours)<select id="savedConversations"><option value="">Loading…</option></select></label>
@@ -154,7 +154,7 @@
   </section>
   <p id="error" class="error" role="alert"></p>
   <main id="transcript" class="transcript-window" aria-live="polite" hidden></main>
-  <p class="privacy-note">No account needed. Your topic and transcript are processed on the server. This browser can revisit its debates for 24 hours, after which the saved text and audio are deleted. Four new debates per hour. AI arguments can be wrong; treat this as an experiment.</p>
+  <p class="privacy-note">No account needed. Topics and audio are processed on the server; generated speech is cached. Your saved debates are available to this browser for 24 hours. Four new debates per hour. AI arguments can be wrong; treat this as an experiment.</p>
   <audio id="player" preload="auto"></audio>
   <script src="polyfills.js"></script>
   <script type="module" src="audio.js"></script>
