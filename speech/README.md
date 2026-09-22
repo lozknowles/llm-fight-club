@@ -6,6 +6,7 @@ The conversation engine does not know how speech is synthesized. It records a pa
 ConversationEngine
   -> persistent browser audio element
      -> SpeechRouter
+        -> SharedSpeechProvider (opt-in private backend)
         -> NaturalTTSProvider (Qwen3-TTS VoiceDesign)
         -> ExistingTTSProvider (FFmpeg/Flite fallback)
 ```
@@ -23,6 +24,8 @@ Natural voice identities are fixed application identifiers:
 None is intended to imitate a real person. Delivery hints are sent separately and appended to the identity instruction only for the current line.
 
 The fallback catalog (`awb`, `kal`, `kal16`, `rms`, `slt`) remains available. If the natural backend fails, the router maps natural interviewer/guest/referee to `awb`/`slt`/`rms`, returns a valid WAV and marks `x-tts-fallback: true`.
+
+Set server-side `SPEECH_SERVICES_URL` and `SPEECH_SERVICES_TOKEN` to opt into the independent shared service. The router maps the three stable application identities to its private Fight Club voices; the credential never reaches the browser. Removing those two settings restores the previous natural/Flite chain without changing debate data.
 
 ## Runtime
 

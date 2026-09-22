@@ -1,11 +1,13 @@
 import http from 'node:http';
 import { HttpSpeechProvider } from './providers/http-speech-provider.mjs';
+import { SharedSpeechProvider } from './providers/shared-speech-provider.mjs';
 
 const host = process.env.SPEECH_ROUTER_HOST || '127.0.0.1';
 const port = Number(process.env.SPEECH_ROUTER_PORT || 18772);
 const allowedOrigin = process.env.SPEECH_ALLOWED_ORIGIN || 'http://127.0.0.1:18770';
 const naturalVoices = ['natural-interviewer', 'natural-guest', 'natural-referee'];
 const fallbackVoices = ['awb', 'kal', 'kal16', 'rms', 'slt'];
+const shared = process.env.SPEECH_SERVICES_TOKEN ? new SharedSpeechProvider({ baseUrl: process.env.SPEECH_SERVICES_URL || 'http://127.0.0.1:19400', token: process.env.SPEECH_SERVICES_TOKEN }) : null;
 
 const natural = new HttpSpeechProvider({
   id: 'qwen3-tts-voicedesign',
@@ -61,12 +63,12 @@ const server = http.createServer(async (request, response) => {
       return response.end();
     }
     if (request.method === 'GET' && url.pathname === '/health') {
-      const [naturalHealth, fallbackHealth] = await Promise.all([providerHealth(natural), providerHealth(existing)]);
+      const [sharedHealth, naturalHealth, fallbackHealth] = await Promise.all([shared ? providerHealth(shared) : Promise.resolve({ available: false, reason: 'not_configured' }), providerHealth(natural), providerHealth(existing)]);
       return send(response, 200, {
-        status: naturalHealth.available || fallbackHealth.available ? 'ok' : 'error',
+        status: sharedHealth.available || naturalHealth.available || fallbackHealth.available ? 'ok' : 'error',
         engine: 'provider-neutral-speech-router',
-        selected: naturalHealth.available ? natural.id : existing.id,
-        providers: { [natural.id]: naturalHealth, [existing.id]: fallbackHealth },
+        selected: sharedHealth.available ? shared.id : naturalHealth.available ? natural.id : existing.id,
+        providers: { [shared?.id || 'shared-speech-services']: sharedHealth, [natural.id]: naturalHealth, [existing.id]: fallbackHealth },
       });
     }
     if (request.method === 'GET' && url.pathname === '/voices') {
@@ -80,7 +82,14 @@ const server = http.createServer(async (request, response) => {
       if (![...naturalVoices, ...fallbackVoices].includes(voice)) throw new Error('Unknown voice');
       let upstream;
       let fallback = false;
-      if (natural.supports(voice)) {
+      if (shared?.supports(voice)) {
+        try {
+          upstream = await shared.synthesize(payload);
+        } catch (error) {
+          console.error(`Shared speech failed, using existing provider chain: ${error.message}`);
+        }
+      }
+      if (!upstream && natural.supports(voice)) {
         try {
           upstream = await natural.synthesize(payload);
         } catch (error) {
@@ -88,7 +97,7 @@ const server = http.createServer(async (request, response) => {
           upstream = await existing.synthesize(payload);
           fallback = true;
         }
-      } else {
+      } else if (!upstream) {
         upstream = await existing.synthesize(payload);
       }
       const audio = Buffer.from(await upstream.arrayBuffer());
