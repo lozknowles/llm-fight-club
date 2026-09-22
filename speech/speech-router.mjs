@@ -65,6 +65,8 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/health') {
       const [sharedHealth, naturalHealth, fallbackHealth] = await Promise.all([shared ? providerHealth(shared) : Promise.resolve({ available: false, reason: 'not_configured' }), providerHealth(natural), providerHealth(existing)]);
       return send(response, 200, {
+        schema: 'llm-fight-club.speech-status/v1',
+        observedAt: new Date().toISOString(),
         status: sharedHealth.available || naturalHealth.available || fallbackHealth.available ? 'ok' : 'error',
         engine: 'provider-neutral-speech-router',
         selected: sharedHealth.available ? shared.id : naturalHealth.available ? natural.id : existing.id,

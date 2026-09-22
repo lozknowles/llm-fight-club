@@ -27,6 +27,8 @@ The fallback catalog (`awb`, `kal`, `kal16`, `rms`, `slt`) remains available. If
 
 Set server-side `SPEECH_SERVICES_URL` and `SPEECH_SERVICES_TOKEN` to opt into the independent shared service. The router maps the three stable application identities to its private Fight Club voices; the credential never reaches the browser. Removing those two settings restores the previous natural/Flite chain without changing debate data.
 
+The spoken studio polls the router's safe `/tts/health` projection with bounded backoff and requires stable shared readiness before changing back. Each generated turn first uses the shared server route, then the participant's selected browser `speechSynthesis` voice, then displayed text. A provider change never occurs midway through an utterance. Epoch-bound cancellation prevents late server audio or browser events from advancing a turn twice. This interface has typed audience controls and does not claim microphone/STT support; the shared status contract still reports recognition separately for future consumers.
+
 ## Runtime
 
 - Public-to-Tailscale router: `100.125.120.114:18772`.

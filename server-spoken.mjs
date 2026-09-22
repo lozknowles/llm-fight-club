@@ -34,6 +34,7 @@ async function proxySpeech(request, response, pathname) {
     method: request.method,
     headers: payload ? { 'content-type': 'application/json' } : undefined,
     body: payload ? JSON.stringify(payload) : undefined,
+    signal: AbortSignal.timeout(request.method === 'GET' ? 5_000 : 125_000),
   });
   const bytes = Buffer.from(await upstream.arrayBuffer());
   const headers = {
@@ -123,7 +124,7 @@ const markdown = (conversation) => `# ${conversation.format}: ${conversation.pre
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost');
-    if (request.method === 'GET' && url.pathname === '/tts/voices') return await proxySpeech(request, response, url.pathname);
+    if (request.method === 'GET' && ['/tts/voices','/tts/health'].includes(url.pathname)) return await proxySpeech(request, response, url.pathname);
     if (request.method === 'POST' && url.pathname === '/tts/synthesize') return await proxySpeech(request, response, url.pathname);
     if (request.method === 'GET' && url.pathname === '/api/config') return send(response, 200, { formats: FORMATS, personalities: PERSONALITIES, models: Object.keys(routes).length ? Object.keys(routes) : ['qwen3-8b'] });
     if (request.method === 'GET' && url.pathname === '/api/health') return send(response, 200, { status: 'ok', engine: 'conversation-v2', speech: 'provider-neutral-router' });

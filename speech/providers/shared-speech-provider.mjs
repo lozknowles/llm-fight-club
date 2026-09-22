@@ -22,7 +22,12 @@ export class SharedSpeechProvider extends SpeechProvider {
     if (!this.#session) this.#session = this.#call('/v1/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ purpose: 'prepared' }) }, 5000).then(response => response.json()).catch(error => { this.#session = undefined; throw error; });
     return this.#session;
   }
-  async health() { return (await this.#call('/v1/health', {}, 5000)).json(); }
+  async health() {
+    const value=await (await this.#call('/v1/health', {}, 5000)).json();
+    const recognition=value.capabilities?.recognition?.status==='ready'?'ready':'unavailable';
+    const synthesis=value.capabilities?.synthesis?.status==='ready'?'ready':'unavailable';
+    return {available:synthesis==='ready',status:value.status||'unavailable',observedAt:value.observedAt||null,capabilities:{recognition:{status:recognition},synthesis:{status:synthesis}}};
+  }
   async synthesize(request) {
     const session = await this.#open();
     const response = await this.#call(`/v1/sessions/${session.id}/speech`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: request.text, voice: voiceMap[request.voice], language: 'en-GB', settings: request.settings || {} }) });
